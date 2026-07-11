@@ -3,11 +3,16 @@ import { getCloudRunServices, deleteCloudRunService } from "@/lib/gcp-client";
 
 export async function POST(request: NextRequest) {
   try {
-    // Basic authentication check using a shared secret
-    const authHeader = request.headers.get("Authorization");
     const cronSecret = process.env.CRON_SECRET;
 
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    // CRON_SECRET is required and must match the Authorization header
+    if (!cronSecret) {
+      console.error("CRON_SECRET environment variable is not set");
+      return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    }
+
+    const authHeader = request.headers.get("Authorization");
+    if (authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

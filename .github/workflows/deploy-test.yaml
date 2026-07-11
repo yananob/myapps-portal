@@ -34,38 +34,31 @@ jobs:
 
   deploy:
     needs: prepare
-    runs-on: ubuntu-latest
-    outputs:
-      url: ${{ steps.deploy.outputs.url }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        #  with:
-        #  submodules: 'true'
-
-      - name: Google Cloud auth
-        id: auth
-        uses: google-github-actions/auth@v3
-        with:
-          workload_identity_provider: 'projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider'
-          service_account: 'cloud-run-functions-deployer@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com'
-
-      - name: Deploy to Cloud Run
-        id: deploy
-        uses: google-github-actions/deploy-cloudrun@v3
-        with:
-          service: ${{ needs.prepare.outputs.service_name }}
-          region: ${{ secrets.GCP_REGION }}
-          source: .
-          flags: --memory=256Mi
-          env_vars: |-
-            GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
-            GCP_REGION=${{ secrets.GCP_REGION }}
-            GITHUB_PAT=${{ secrets.GH_PAT }}
-            GITHUB_OWNER=${{ secrets.GH_OWNER }}
-            APP_ENV=test
-          secrets: |-
-            GCLOUD_SERVICE_ACCOUNT=GCLOUD_SERVICE_ACCOUNT:latest
+    uses: ./.github/workflows/deploy-cloud-functions.yaml
+    with:
+      function_name: ${{ needs.prepare.outputs.service_name }}
+      service_account_name: 'cloud-run-functions-deployer'
+      wip_pool_name: 'github-actions-pool'
+      wip_provider_name: 'github-provider'
+      runtime: nodejs22
+      secrets_config: |-
+        GH_PAT
+        GH_OWNER
+        GCLOUD_SERVICE_ACCOUNT
+      deploy_http_trigger: true
+      deploy_event_trigger: true
+      http_max_instance_count: 1
+      memory: '256M'
+      environment_variables: |-
+        GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
+        GCP_REGION=${{ secrets.GCP_REGION }}
+        GITHUB_PAT=${{ secrets.GH_PAT }}
+        GITHUB_OWNER=${{ secrets.GH_OWNER }}
+        APP_ENV=test
+    secrets:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ secrets.GCP_REGION }}
+      GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }}
 
   comment:
     needs: [prepare, deploy]
@@ -76,11 +69,11 @@ jobs:
       PR_NUMBER: ${{ github.event.pull_request.number }}
     permissions:
       pull-requests: write
-      contents: read  # チェックアウトなど、他の操作に必要
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: 'true'
       - name: Add comment to PR
         run: |
-          gh pr comment $PR_NUMBER --body "Deployed to url ${{ needs.deploy.outputs.url }} [skip ci]"
+          gh pr comment $PR_NUMBER --body "Deployed to url https://${{ secrets.GCP_REGION }}-${{ secrets.GCP_PROJECT_ID }}.cloudfunctions.net/${{ needs.prepare.outputs.service_name }} [skip ci]"

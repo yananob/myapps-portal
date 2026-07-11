@@ -24,6 +24,15 @@ describe("Cleanup API", () => {
     } as unknown as NextRequest;
   };
 
+  it("should return 500 if CRON_SECRET is not set", async () => {
+    delete process.env.CRON_SECRET;
+    const request = createRequest("Bearer test-secret");
+    const response = await POST(request);
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.error).toBe("Internal Server Error");
+  });
+
   it("should return 401 if unauthorized", async () => {
     const request = createRequest("Bearer wrong-secret");
     const response = await POST(request);
