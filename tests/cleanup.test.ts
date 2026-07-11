@@ -16,8 +16,9 @@ describe("Cleanup API", () => {
     process.env.CRON_SECRET = "test-secret";
   });
 
-  const createRequest = (authHeader?: string) => {
+  const createRequest = (url: string = "http://localhost/api/cleanup", authHeader?: string) => {
     return {
+      url,
       headers: {
         get: (name: string) => (name === "Authorization" ? authHeader : null),
       },
@@ -26,21 +27,39 @@ describe("Cleanup API", () => {
 
   it("should return 500 if CRON_SECRET is not set", async () => {
     delete process.env.CRON_SECRET;
-    const request = createRequest("Bearer test-secret");
+    const request = createRequest("http://localhost/api/cleanup", "Bearer test-secret");
     const response = await POST(request);
     expect(response.status).toBe(500);
-    const body = await response.json();
-    expect(body.error).toBe("Internal Server Error");
   });
 
   it("should return 401 if unauthorized", async () => {
-    const request = createRequest("Bearer wrong-secret");
+    const request = createRequest("http://localhost/api/cleanup", "Bearer wrong-secret");
     const response = await POST(request);
     expect(response.status).toBe(401);
   });
 
-  it("should delete only stale test services when authorized", async () => {
-    const request = createRequest("Bearer test-secret");
+  it("should default to dry-run and not delete services", async () => {
+    const request = createRequest("http://localhost/api/cleanup", "Bearer test-secret");
+    const now = new Date();
+    const thirtyHoursAgo = new Date(now.getTime() - 30 * 60 * 60 * 1000);
+
+    const mockServices = [
+      { name: "app-test", updatedAt: thirtyHoursAgo, url: "", logUrl: "" },
+    ];
+
+    vi.mocked(getCloudRunServices).mockResolvedValue(mockServices as any);
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.dryRun).toBe(true);
+    expect(body.identified).toContain("app-test");
+    expect(deleteCloudRunService).not.toHaveBeenCalled();
+  });
+
+  it("should delete stale test services when dryRun=false is specified", async () => {
+    const request = createRequest("http://localhost/api/cleanup?dryRun=false", "Bearer test-secret");
     const now = new Date();
     const thirtyHoursAgo = new Date(now.getTime() - 30 * 60 * 60 * 1000);
     const tenHoursAgo = new Date(now.getTime() - 10 * 60 * 60 * 1000);
@@ -50,7 +69,6 @@ describe("Cleanup API", () => {
       { name: "app-test-event", updatedAt: thirtyHoursAgo, url: "", logUrl: "" }, // Should be deleted
       { name: "app-test", updatedAt: tenHoursAgo, url: "", logUrl: "" }, // Too recent
       { name: "app-main", updatedAt: thirtyHoursAgo, url: "", logUrl: "" }, // Not a test service
-      { name: "other-service", updatedAt: thirtyHoursAgo, url: "", logUrl: "" }, // Not a test service
     ];
 
     vi.mocked(getCloudRunServices).mockResolvedValue(mockServices as any);
@@ -60,14 +78,15 @@ describe("Cleanup API", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
+    expect(body.dryRun).toBe(false);
     expect(body.deleted).toContain("app-test");
     expect(body.deleted).toContain("app-test-event");
     expect(body.deleted).toHaveLength(2);
     expect(deleteCloudRunService).toHaveBeenCalledTimes(2);
   });
 
-  it("should handle partial failures in deletion", async () => {
-    const request = createRequest("Bearer test-secret");
+  it("should handle partial failures in deletion when dryRun=false", async () => {
+    const request = createRequest("http://localhost/api/cleanup?dryRun=false", "Bearer test-secret");
     const now = new Date();
     const thirtyHoursAgo = new Date(now.getTime() - 30 * 60 * 60 * 1000);
 

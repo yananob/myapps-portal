@@ -16,6 +16,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { searchParams } = new URL(request.url);
+    const dryRun = searchParams.get("dryRun") !== "false"; // Default to true
+
     const services = await getCloudRunServices();
     const now = new Date();
     const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -26,6 +29,15 @@ export async function POST(request: NextRequest) {
       const isStale = service.updatedAt < twentyFourHoursAgo;
       return isTestService && isStale;
     });
+
+    if (dryRun) {
+      console.log(`[Dry Run] Stale services identified for deletion: ${staleServices.map(s => s.name).join(", ")}`);
+      return NextResponse.json({
+        message: `Dry run completed. Identified ${staleServices.length} services for deletion.`,
+        identified: staleServices.map(s => s.name),
+        dryRun: true,
+      });
+    }
 
     const results = await Promise.allSettled(
       staleServices.map(async (service) => {
@@ -46,6 +58,7 @@ export async function POST(request: NextRequest) {
       message: `Cleanup completed. Deleted: ${deleted.length}, Failed: ${failed.length}`,
       deleted,
       failed,
+      dryRun: false,
     });
   } catch (error: any) {
     console.error("Cleanup API error:", error);
