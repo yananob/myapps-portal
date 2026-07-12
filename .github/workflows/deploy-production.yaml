@@ -18,11 +18,13 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       service_name: ${{ steps.set_name.outputs.service_name }}
+      event_service_name: ${{ steps.set_name.outputs.event_service_name }}
     steps:
       - name: Set service name
         id: set_name
         run: |
           echo "service_name=my-cfapps-portal" >> $GITHUB_OUTPUT
+          echo "event_service_name=my-cfapps-portal-event" >> $GITHUB_OUTPUT
 
   deploy:
     needs: prepare
@@ -60,8 +62,41 @@ jobs:
           secrets: |-
             GCLOUD_SERVICE_ACCOUNT=GCLOUD_SERVICE_ACCOUNT:latest
 
+  deploy-event:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+
+      - name: Google Cloud auth
+        id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: 'projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider'
+          service_account: 'cloud-run-functions-deployer@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com'
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v3
+        with:
+          service: ${{ needs.prepare.outputs.event_service_name }}
+          region: ${{ secrets.GCP_REGION }}
+          source: .
+          flags: --memory=256Mi
+          env_vars: |-
+            GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
+            GCP_REGION=${{ secrets.GCP_REGION }}
+            GITHUB_PAT=${{ secrets.GH_PAT }}
+            GITHUB_OWNER=${{ secrets.GH_OWNER }}
+            APP_ENV=production
+          secrets: |-
+            GCLOUD_SERVICE_ACCOUNT=GCLOUD_SERVICE_ACCOUNT:latest
+
   comment:
-    needs: [prepare, deploy]
+    needs: [prepare, deploy, deploy-event]
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     env:
@@ -72,6 +107,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: 'true'
       - name: Add comment to PR
         if: env.PR_NUMBER != ''
         run: |
