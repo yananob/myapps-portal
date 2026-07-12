@@ -1,9 +1,9 @@
 name: Deploy Cloud Run (test)
 
 on:
-  push:
-    branches:
-      - test
+  # push:
+  #   branches:
+  #     - test
   pull_request:
     branches:
       - test
