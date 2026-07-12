@@ -2,7 +2,7 @@
 set -eu
 
 # Usage: ./tests/trigger_event_cloud.sh [command] [dry_run]
-COMMAND=${1:-"batch-update-books"}
+COMMAND=${1:-""}
 DRY_RUN=${2:-"true"} # デフォルトは dry-run モード
 TOPIC="my-cfapps-portal-event"
 

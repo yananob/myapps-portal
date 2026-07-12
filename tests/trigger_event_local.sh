@@ -3,7 +3,7 @@ set -eu
 
 # Usage: ./tests/trigger_event_local.sh [port] [command] [dry_run]
 PORT=${1:-3000}
-COMMAND=${2:-"batch-update-books"}
+COMMAND=${2:-""}
 DRY_RUN=${3:-"true"} # デフォルトは dry-run モード
 TOPIC="my-cfapps-portal-event"
 
