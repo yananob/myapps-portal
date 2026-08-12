@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: my-cfapps-portal-deploy-test
+  group: myapps-portal-deploy-test
 
 permissions:
   contents: 'read'
@@ -31,8 +31,8 @@ jobs:
       - name: Set service name
         id: set_name
         run: |
-          echo "http_service_name=my-cfapps-portal-test" >> $GITHUB_OUTPUT
-          echo "event_service_name=my-cfapps-portal-test-event" >> $GITHUB_OUTPUT
+          echo "http_service_name=myapps-portal-test" >> $GITHUB_OUTPUT
+          echo "event_service_name=myapps-portal-test-event" >> $GITHUB_OUTPUT
 
   deploy-http:
     needs: prepare

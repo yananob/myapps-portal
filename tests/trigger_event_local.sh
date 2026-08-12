@@ -5,7 +5,7 @@ set -eu
 PORT=${1:-3000}
 COMMAND=${2:-""}
 DRY_RUN=${3:-"true"} # デフォルトは dry-run モード
-TOPIC="my-cfapps-portal-event"
+TOPIC="myapps-portal-event"
 
 # Base64 encode the data (matching the structure expected by the service)
 DATA=$(echo -n "{\"topic\": \"$TOPIC\", \"command\": \"$COMMAND\", \"dryRun\": $DRY_RUN}" | base64)

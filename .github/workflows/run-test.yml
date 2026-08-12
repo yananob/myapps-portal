@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: my-cfapps-portal-run-test-${{ github.ref }}
+  group: myapps-portal-run-test-${{ github.ref }}
   cancel-in-progress: true
 
 defaults:
