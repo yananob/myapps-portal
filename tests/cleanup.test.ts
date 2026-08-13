@@ -142,9 +142,9 @@ describe("Cleanup API", () => {
   });
 
   it("should support actual deletion in event invocation if dryRun=false is provided in Pub/Sub data", async () => {
-    // base64 encoded string of {"topic": "my-cfapps-portal-event", "command": "cleanup", "dryRun": false}
+    // base64 encoded string of {"topic": "myapps-portal-event", "command": "cleanup", "dryRun": false}
     const payload = Buffer.from(JSON.stringify({
-      topic: "my-cfapps-portal-event",
+      topic: "myapps-portal-event",
       command: "cleanup",
       dryRun: false
     })).toString("base64");
@@ -153,7 +153,7 @@ describe("Cleanup API", () => {
       message: {
         data: payload
       },
-      subscription: "projects/test-pj/subscriptions/my-cfapps-portal-event"
+      subscription: "projects/test-pj/subscriptions/myapps-portal-event"
     };
 
     const request = createRequest(

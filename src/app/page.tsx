@@ -15,9 +15,9 @@ export default function Dashboard() {
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [showHidden, setShowHidden] = useState(false);
 
-  const CACHE_KEY = "my-cfapps-portal-cache";
-  const CACHE_TIME_KEY = "my-cfapps-portal-cache-time";
-  const HIDDEN_KEY = "my-cfapps-portal-hidden";
+  const CACHE_KEY = "myapps-portal-cache";
+  const CACHE_TIME_KEY = "myapps-portal-cache-time";
+  const HIDDEN_KEY = "myapps-portal-hidden";
 
   const fetchServices = async (useCache = true) => {
     setLoading(true);
