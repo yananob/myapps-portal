@@ -20,6 +20,20 @@ export function getFirestoreClient(): Firestore {
 }
 
 /**
+ * 環境変数 APP_ENV の値に応じてルートコレクション名を決定します。
+ * 'test' の場合は '-test' のサフィックスを付与します。
+ *
+ * @returns ルートコレクション名
+ */
+export function getRootCollectionName(): string {
+  const appEnv = process.env.APP_ENV;
+  if (appEnv === "test") {
+    return "myapps-portal-test";
+  }
+  return "myapps-portal";
+}
+
+/**
  * すべての子リポジトリの最終実行日時を取得します。
  * Firestoreの接続エラーや認証エラーが発生した場合は、空のオブジェクトを返して処理を継続します。
  *
@@ -29,8 +43,9 @@ export async function getRepoLastExecutedTimes(): Promise<Record<string, Date>> 
   const result: Record<string, Date> = {};
   try {
     const db = getFirestoreClient();
+    const rootCollection = getRootCollectionName();
     const snapshot = await db
-      .collection("myapps-portal")
+      .collection(rootCollection)
       .doc("jules-history")
       .collection("repos")
       .get();
@@ -41,7 +56,7 @@ export async function getRepoLastExecutedTimes(): Promise<Record<string, Date>> 
       result[doc.id] = lastExecutedAt;
     });
   } catch (error) {
-    console.warn("Firestoreからの最終実行日時取得に失敗しました。空の履歴として処理を続行します:", error);
+    console.warn(`Firestoreからの最終実行日時取得に失敗しました。空の履歴として処理を続行します (${getRootCollectionName()}):`, error);
   }
   return result;
 }
@@ -54,8 +69,9 @@ export async function getRepoLastExecutedTimes(): Promise<Record<string, Date>> 
 export async function updateRepoLastExecutedTime(repo: string): Promise<void> {
   try {
     const db = getFirestoreClient();
+    const rootCollection = getRootCollectionName();
     await db
-      .collection("myapps-portal")
+      .collection(rootCollection)
       .doc("jules-history")
       .collection("repos")
       .doc(repo)
@@ -63,7 +79,7 @@ export async function updateRepoLastExecutedTime(repo: string): Promise<void> {
         repoName: repo,
         lastExecutedAt: new Date(),
       }, { merge: true });
-    console.log(`Firestoreにリポジトリ ${repo} の最終実行日時を保存しました。`);
+    console.log(`Firestore (${rootCollection}) にリポジトリ ${repo} の最終実行日時を保存しました。`);
   } catch (error) {
     console.error(`Firestoreへの最終実行日時（${repo}）の保存に失敗しました:`, error);
   }

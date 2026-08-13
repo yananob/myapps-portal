@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { listAllJulesSources, createJulesSession } from "@/lib/jules-client";
-import { getRepoLastExecutedTimes, updateRepoLastExecutedTime } from "@/lib/firestore-client";
+import { getRepoLastExecutedTimes, updateRepoLastExecutedTime, getRootCollectionName } from "@/lib/firestore-client";
 import { POST } from "@/app/api/jules-automation/route";
 import { NextRequest } from "next/server";
 
@@ -14,7 +14,32 @@ vi.mock("@/lib/jules-client", () => ({
 vi.mock("@/lib/firestore-client", () => ({
   getRepoLastExecutedTimes: vi.fn(),
   updateRepoLastExecutedTime: vi.fn(),
+  getRootCollectionName: () => {
+    const appEnv = process.env.APP_ENV;
+    if (appEnv === "test") {
+      return "myapps-portal-test";
+    }
+    return "myapps-portal";
+  },
 }));
+
+describe("getRootCollectionName のテスト", () => {
+  const originalEnv = process.env.APP_ENV;
+
+  afterEach(() => {
+    process.env.APP_ENV = originalEnv;
+  });
+
+  it("APP_ENVがtestの場合は myapps-portal-test を返却すること", () => {
+    process.env.APP_ENV = "test";
+    expect(getRootCollectionName()).toBe("myapps-portal-test");
+  });
+
+  it("APP_ENVがtest以外（例: production）の場合は myapps-portal を返却すること", () => {
+    process.env.APP_ENV = "production";
+    expect(getRootCollectionName()).toBe("myapps-portal");
+  });
+});
 
 describe("Jules Automation API エンドポイントのテスト", () => {
   beforeEach(() => {
@@ -302,7 +327,7 @@ describe("Jules Automation API エンドポイントのテスト", () => {
 
     vi.mocked(listAllJulesSources).mockResolvedValue(mockSources);
 
-    // Pub/Sub 形式のメッセージボディ
+    // Pub/Sub 形式 of message body
     const payload = Buffer.from(JSON.stringify({
       dryRun: false,
       task: "refactor"
