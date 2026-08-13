@@ -22,7 +22,27 @@ permissions:
   id-token: 'write'
 
 jobs:
-  prepare:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v5
+      with:
+        submodules: 'true'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v5
+      with:
+        node-version: "24"
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run tests
+      run: bash tests/run_tests.sh
+
+  prepare-deploy:
     runs-on: ubuntu-latest
     outputs:
       http_service_name: ${{ steps.set_name.outputs.http_service_name }}
@@ -35,7 +55,7 @@ jobs:
           echo "event_service_name=myapps-portal-test-event" >> $GITHUB_OUTPUT
 
   deploy-http:
-    needs: prepare
+    needs: [prepare-deploy, test]
     runs-on: ubuntu-latest
     outputs:
       url: ${{ steps.deploy.outputs.url }}
@@ -56,7 +76,7 @@ jobs:
         id: deploy
         uses: google-github-actions/deploy-cloudrun@v3
         with:
-          service: ${{ needs.prepare.outputs.http_service_name }}
+          service: ${{ needs.prepare-deploy.outputs.http_service_name }}
           region: ${{ secrets.GCP_REGION }}
           source: .
           flags: --memory=256Mi
@@ -68,9 +88,10 @@ jobs:
             APP_ENV=test
           secrets: |-
             GCLOUD_SERVICE_ACCOUNT=GCLOUD_SERVICE_ACCOUNT:latest
+            JULES_API_KEY=JULES_API_KEY:latest
 
   # deploy-event:
-  #   needs: prepare
+  #   needs: prepare-deploy
   #   runs-on: ubuntu-latest
   #   steps:
   #     - name: Checkout
@@ -89,7 +110,7 @@ jobs:
   #       id: deploy
   #       uses: google-github-actions/deploy-cloudrun@v3
   #       with:
-  #         service: ${{ needs.prepare.outputs.event_service_name }}
+  #         service: ${{ needs.prepare-deploy.outputs.event_service_name }}
   #         region: ${{ secrets.GCP_REGION }}
   #         source: .
   #         flags: --memory=256Mi
@@ -103,8 +124,8 @@ jobs:
   #           GCLOUD_SERVICE_ACCOUNT=GCLOUD_SERVICE_ACCOUNT:latest
 
   comment:
-    # needs: [prepare, deploy-http, deploy-event]
-    needs: [prepare, deploy-http]
+    # needs: [prepare-deploy, deploy-http, deploy-event]
+    needs: [prepare-deploy, deploy-http]
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     env:
@@ -114,7 +135,7 @@ jobs:
       pull-requests: write
       contents: read  # チェックアウトなど、他の操作に必要
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: 'true'
       - name: Add comment to PR

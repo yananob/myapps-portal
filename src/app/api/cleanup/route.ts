@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCloudRunServices, deleteCloudRunService } from "@/lib/gcp-client";
+import { executeCleanup } from "@/lib/cleanup-logic";
+import { executeJulesAutomation } from "@/lib/jules-automation-logic";
 
+/**
+ * 共通バッチ起動エンドポイント
+ *
+ * Pub/Sub や cron などのトリガーを受け取り、起動パラメータ（command）に基づいて
+ * クリーンアップ処理またはJules自動化処理を使い分けて実行します。
+ */
 export async function POST(request: NextRequest) {
   try {
-    // Basic authentication check using a shared secret
+    // 1. 認証チェック
     const authHeader = request.headers.get("Authorization");
     const cronSecret = process.env.CRON_SECRET;
 
@@ -11,43 +18,55 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Event/PubSubの検知
-    let isEvent = false;
+    // 2. リクエストボディの読み込みとパース
     let body: any = null;
-
-    // CloudEventヘッダーの確認
-    const ceType = request.headers.get("ce-type");
-    const ceId = request.headers.get("ce-id");
-    if (ceType || ceId) {
-      isEvent = true;
-    }
-
-    // リクエストボディの読み込みとパース
     try {
       const text = await request.clone().text();
       if (text) {
         body = JSON.parse(text);
       }
     } catch (e) {
-      // ボディパースエラーは無視
+      // ボディがない、またはパースエラーの場合は無視
     }
 
-    if (body && (body.message || body.subscription)) {
-      isEvent = true;
-    }
-
-    // dry-runオプションの判定
+    // 各パラメータ（起動、ドライラン、タスク、制限）の取得
+    let bodyCommand: string | null = null;
     let bodyDryRun: boolean | null = null;
+    let bodyTask: string | null = null;
+    let bodyLimit: number | null = null;
+
     if (body) {
+      if (typeof body.command !== "undefined") {
+        bodyCommand = body.command;
+      }
       if (typeof body.dryRun !== "undefined") {
         bodyDryRun = body.dryRun === true || body.dryRun === "true";
-      } else if (body.message?.data) {
-        // Pub/Subメッセージのデータをデコードして確認
+      }
+      if (typeof body.task !== "undefined") {
+        bodyTask = body.task;
+      }
+      if (typeof body.limit !== "undefined") {
+        bodyLimit = Number(body.limit);
+      }
+
+      // Pub/Subメッセージの場合は data 部をデコードして確認
+      if (body.message?.data) {
         try {
           const decodedData = Buffer.from(body.message.data, "base64").toString("utf-8");
           const parsedData = JSON.parse(decodedData);
-          if (parsedData && typeof parsedData.dryRun !== "undefined") {
-            bodyDryRun = parsedData.dryRun === true || parsedData.dryRun === "true";
+          if (parsedData) {
+            if (parsedData.command) {
+              bodyCommand = parsedData.command;
+            }
+            if (typeof parsedData.dryRun !== "undefined") {
+              bodyDryRun = parsedData.dryRun === true || parsedData.dryRun === "true";
+            }
+            if (parsedData.task) {
+              bodyTask = parsedData.task;
+            }
+            if (typeof parsedData.limit !== "undefined") {
+              bodyLimit = Number(parsedData.limit);
+            }
           }
         } catch (e) {
           // デコード/パースエラーは無視
@@ -55,11 +74,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // URLクエリパラメータの読み込み
     const urlString = request.url || "http://localhost/api/cleanup";
     const { searchParams } = new URL(urlString);
+    const commandQuery = searchParams.get("command");
     const dryRunQuery = searchParams.get("dryRun");
+    const taskQuery = searchParams.get("task");
+    const limitQuery = searchParams.get("limit");
 
-    // デフォルトは安全のため dryRun = true（イベント起動・通常HTTP起動を問わず）
+    // デフォルト値の決定
+    // commandの優先順位: クエリパラメータ > リクエストボディ / Pub/Subデータ > デフォルト("cleanup")
+    const command = commandQuery || bodyCommand || "cleanup";
+
+    // dryRunの優先順位: クエリパラメータ > リクエストボディ / Pub/Subデータ > デフォルト(true)
     let dryRun = true;
     if (dryRunQuery !== null) {
       dryRun = dryRunQuery !== "false";
@@ -67,59 +94,44 @@ export async function POST(request: NextRequest) {
       dryRun = bodyDryRun;
     }
 
-    const services = await getCloudRunServices();
-    const now = new Date();
-    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    // コマンドに応じたディスパッチ処理
+    if (command === "jules-automation") {
+      // Jules API キー & GITHUB_OWNER の確認
+      const julesApiKey = process.env.JULES_API_KEY;
+      const githubOwner = process.env.GITHUB_OWNER;
 
-    const staleServices = services.filter((service) => {
-      const isTestService =
-        service.name.endsWith("-test") || service.name.endsWith("-test-event");
-      const isStale = service.updatedAt < twentyFourHoursAgo;
-      return isTestService && isStale;
-    });
+      if (!julesApiKey) {
+        return NextResponse.json({ error: "JULES_API_KEY is not set" }, { status: 500 });
+      }
+      if (!githubOwner) {
+        return NextResponse.json({ error: "GITHUB_OWNER is not set" }, { status: 500 });
+      }
 
-    if (dryRun) {
-      console.log(`[Dry-run] 削除対象候補になったサービス (${staleServices.length}件):`);
-      staleServices.forEach((service) => {
-        console.log(`- ${service.name} (最終更新: ${service.updatedAt.toISOString()})`);
+      const task = taskQuery || bodyTask || "all";
+      let limit: number | undefined = undefined;
+      const rawLimit = limitQuery !== null ? Number(limitQuery) : bodyLimit;
+      if (rawLimit !== null && !isNaN(rawLimit)) {
+        limit = rawLimit;
+      }
+
+      console.log(`[Batch Dispatch] Jules 自動化タスクを起動します (command: ${command}, dryRun: ${dryRun}, task: ${task}, limit: ${limit ?? "デフォルト"})`);
+      const result = await executeJulesAutomation({
+        dryRun,
+        task,
+        limit,
+        julesApiKey,
+        githubOwner,
       });
 
-      return NextResponse.json({
-        message: `Dry-run completed. Found ${staleServices.length} candidates for deletion.`,
-        deleted: [],
-        failed: [],
-        candidates: staleServices.map((s) => s.name),
-        dryRun: true,
-      });
+      return NextResponse.json(result);
+    } else {
+      // デフォルト: クリーンアップ処理
+      console.log(`[Batch Dispatch] クリーンアップ処理を起動します (command: ${command}, dryRun: ${dryRun})`);
+      const result = await executeCleanup({ dryRun });
+      return NextResponse.json(result);
     }
-
-    console.log(`削除対象サービス (${staleServices.length}件) の削除を実行します。`);
-    const results = await Promise.allSettled(
-      staleServices.map(async (service) => {
-        console.log(`サービスを削除しています: ${service.name}`);
-        await deleteCloudRunService(service.name);
-        return service.name;
-      })
-    );
-
-    const deleted = results
-      .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
-      .map((r) => r.value);
-
-    const failed = results
-      .filter((r): r is PromiseRejectedResult => r.status === "rejected")
-      .map((r) => r.reason);
-
-    console.log(`クリーンアップ処理完了。削除数: ${deleted.length}, 失敗数: ${failed.length}`);
-
-    return NextResponse.json({
-      message: `Cleanup completed. Deleted: ${deleted.length}, Failed: ${failed.length}`,
-      deleted,
-      failed,
-      dryRun: false,
-    });
   } catch (error: any) {
-    console.error("Cleanup API error:", error);
+    console.error("Batch Dispatch API error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Internal Server Error" },
       { status: 500 }

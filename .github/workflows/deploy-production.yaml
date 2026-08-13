@@ -61,6 +61,7 @@ jobs:
             APP_ENV=production
           secrets: |-
             GCLOUD_SERVICE_ACCOUNT=GCLOUD_SERVICE_ACCOUNT:latest
+            JULES_API_KEY=JULES_API_KEY:latest
 
   deploy-event:
     needs: prepare
