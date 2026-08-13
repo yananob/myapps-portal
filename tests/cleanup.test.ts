@@ -6,7 +6,19 @@ vi.mock("@/lib/gcp-client", () => ({
   deleteCloudRunService: vi.fn(),
 }));
 
+vi.mock("@/lib/jules-client", () => ({
+  listAllJulesSources: vi.fn(),
+  createJulesSession: vi.fn(),
+}));
+
+vi.mock("@/lib/firestore-client", () => ({
+  getRepoLastExecutedTimes: vi.fn(),
+  updateRepoLastExecutedTime: vi.fn(),
+}));
+
 import { getCloudRunServices, deleteCloudRunService } from "@/lib/gcp-client";
+import { listAllJulesSources, createJulesSession } from "@/lib/jules-client";
+import { getRepoLastExecutedTimes, updateRepoLastExecutedTime } from "@/lib/firestore-client";
 import { POST } from "@/app/api/cleanup/route";
 import { NextRequest } from "next/server";
 
@@ -180,5 +192,55 @@ describe("Cleanup API", () => {
     expect(body.dryRun).toBe(false);
     expect(body.deleted).toContain("app-test");
     expect(deleteCloudRunService).toHaveBeenCalledTimes(1);
+  });
+
+  it("should dispatch to executeJulesAutomation when command is jules-automation", async () => {
+    process.env.JULES_API_KEY = "test-jules-key";
+    process.env.GITHUB_OWNER = "test-owner";
+
+    // base64 encoded string of {"topic": "myapps-portal-event", "command": "jules-automation", "dryRun": true}
+    const payload = Buffer.from(JSON.stringify({
+      topic: "myapps-portal-event",
+      command: "jules-automation",
+      dryRun: true
+    })).toString("base64");
+
+    const bodyObj = {
+      message: {
+        data: payload
+      },
+      subscription: "projects/test-pj/subscriptions/myapps-portal-event"
+    };
+
+    const request = createRequest(
+      "Bearer test-secret",
+      "http://localhost/api/cleanup",
+      { "ce-type": "com.google.cloud.pubsub.topic.publish" },
+      bodyObj
+    );
+
+    // Mock responses for Jules
+    vi.mocked(listAllJulesSources).mockResolvedValue([
+      {
+        name: "sources/github/test-owner/_template",
+        id: "github/test-owner/_template",
+        githubRepo: { owner: "test-owner", repo: "_template" },
+      },
+      {
+        name: "sources/github/test-owner/app-one",
+        id: "github/test-owner/app-one",
+        githubRepo: { owner: "test-owner", repo: "app-one" },
+      }
+    ]);
+    vi.mocked(getRepoLastExecutedTimes).mockResolvedValue({});
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.dryRun).toBe(true);
+    expect(body.message).toContain("Simulated 3 Jules sessions");
+    expect(listAllJulesSources).toHaveBeenCalledTimes(1);
+    expect(getCloudRunServices).not.toHaveBeenCalled(); // Ensure cleanup logic was NOT executed
   });
 });
