@@ -29,7 +29,11 @@ export async function getRepoLastExecutedTimes(): Promise<Record<string, Date>> 
   const result: Record<string, Date> = {};
   try {
     const db = getFirestoreClient();
-    const snapshot = await db.collection("jules-repo-history").get();
+    const snapshot = await db
+      .collection("myapps-portal")
+      .doc("jules-history")
+      .collection("repos")
+      .get();
     snapshot.forEach((doc) => {
       const data = doc.data();
       // Firestoreの Timestamp から Date オブジェクトへ変換
@@ -50,10 +54,15 @@ export async function getRepoLastExecutedTimes(): Promise<Record<string, Date>> 
 export async function updateRepoLastExecutedTime(repo: string): Promise<void> {
   try {
     const db = getFirestoreClient();
-    await db.collection("jules-repo-history").doc(repo).set({
-      repoName: repo,
-      lastExecutedAt: new Date(),
-    }, { merge: true });
+    await db
+      .collection("myapps-portal")
+      .doc("jules-history")
+      .collection("repos")
+      .doc(repo)
+      .set({
+        repoName: repo,
+        lastExecutedAt: new Date(),
+      }, { merge: true });
     console.log(`Firestoreにリポジトリ ${repo} の最終実行日時を保存しました。`);
   } catch (error) {
     console.error(`Firestoreへの最終実行日時（${repo}）の保存に失敗しました:`, error);
