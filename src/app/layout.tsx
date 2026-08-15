@@ -14,12 +14,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Cloud Run Service Manager",
+  title: "MyApps Manager",
   description: "Management portal for Cloud Run services",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "CR Manager",
+    title: "MyApps Manager",
   },
   icons: {
     apple: "/icon.png",
