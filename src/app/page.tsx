@@ -106,7 +106,7 @@ export default function Dashboard() {
       <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
-            GitHub Apps Manager
+            MyApps Manager
           </h1>
           {lastUpdated && !error && (
             <p className="text-sm text-slate-500 mt-1">
