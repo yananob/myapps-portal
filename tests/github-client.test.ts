@@ -22,7 +22,7 @@ describe('getAllReposInfo', () => {
     vi.clearAllMocks()
   })
 
-  it('fetches and filters repositories correctly', async () => {
+  it('fetches and filters repositories correctly with Dependabot alerts', async () => {
     const mockRepos = [
       {
         name: 'repo1',
@@ -47,6 +47,15 @@ describe('getAllReposInfo', () => {
     const octokitInstance = new Octokit()
     vi.mocked(octokitInstance.paginate).mockResolvedValue(mockRepos as any)
 
+    octokitInstance.rest.dependabot = {
+      listAlertsForRepo: vi.fn().mockImplementation(async ({ repo }) => {
+        if (repo === 'repo1') {
+          return { data: [{ number: 1 }, { number: 2 }] }
+        }
+        return { data: [] }
+      }),
+    } as any
+
     const result = await getAllReposInfo()
 
     expect(result.size).toBe(1)
@@ -58,6 +67,9 @@ describe('getAllReposInfo', () => {
     expect(repo1?.repoUrl).toBe('https://github.com/test-owner/repo1')
     expect(repo1?.issueUrl).toBe('https://github.com/test-owner/repo1/issues')
     expect(repo1?.julesUrl).toContain('/test-owner/repo1/')
+    expect(repo1?.hasDependabotAlerts).toBe(true)
+    expect(repo1?.dependabotAlertsCount).toBe(2)
+    expect(repo1?.dependabotUrl).toBe('https://github.com/test-owner/repo1/security/dependabot')
   })
 
   it('throws error if GITHUB_OWNER is not set', async () => {

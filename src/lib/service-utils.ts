@@ -1,4 +1,4 @@
-import { ServiceGroup } from "@/lib/types";
+import { ServiceGroup, GitHubRepoInfo } from "@/lib/types";
 
 export interface ServiceListItem {
   name: string;
@@ -6,7 +6,7 @@ export interface ServiceListItem {
   logUrl: string;
 }
 
-export function groupServices(services: ServiceListItem[], repoMap: Map<string, { repoUrl: string; issueUrl: string; julesUrl: string }>): ServiceGroup[] {
+export function groupServices(services: ServiceListItem[], repoMap: Map<string, GitHubRepoInfo>): ServiceGroup[] {
   const groupsMap = new Map<string, ServiceGroup>();
 
   // 1. GitHubリポジトリをベースに初期グループを作成
@@ -17,6 +17,9 @@ export function groupServices(services: ServiceListItem[], repoMap: Map<string, 
       repoUrl: repoInfo.repoUrl,
       issueUrl: repoInfo.issueUrl,
       julesUrl: repoInfo.julesUrl,
+      hasDependabotAlerts: repoInfo.hasDependabotAlerts,
+      dependabotAlertsCount: repoInfo.dependabotAlertsCount,
+      dependabotUrl: repoInfo.dependabotUrl,
     });
   }
 

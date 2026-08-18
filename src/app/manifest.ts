@@ -2,8 +2,8 @@ import { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Cloud Run Manager',
-    short_name: 'CR Manager',
+    name: 'MyApps Manager',
+    short_name: 'MyApps Manager',
     description: 'Management portal for Cloud Run services',
     start_url: '/',
     display: 'standalone',

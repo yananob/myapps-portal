@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Search, Loader2, RefreshCw, AlertCircle, X, Eye, EyeOff } from "lucide-react";
+import { Search, Loader2, RefreshCw, AlertCircle, X, Eye, EyeOff, ShieldAlert } from "lucide-react";
 import { ServiceCard } from "@/components/ServiceCard";
 import { cn } from "@/lib/utils";
 import { ServiceGroup } from "@/lib/types";
@@ -14,6 +14,7 @@ export default function Dashboard() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [showHidden, setShowHidden] = useState(false);
+  const [filterDependabotOnly, setFilterDependabotOnly] = useState(false);
 
   const CACHE_KEY = "myapps-portal-cache";
   const CACHE_TIME_KEY = "myapps-portal-cache-time";
@@ -91,6 +92,7 @@ export default function Dashboard() {
         group.baseName.toLowerCase().includes(searchQuery.toLowerCase())
       )
       .filter((group) => showHidden || !hiddenIds.has(group.baseName))
+      .filter((group) => !filterDependabotOnly || Boolean(group.hasDependabotAlerts))
       .sort((a, b) => {
         // 非表示のものを下に持ってくる
         const aHidden = hiddenIds.has(a.baseName);
@@ -99,14 +101,14 @@ export default function Dashboard() {
         if (!aHidden && bHidden) return -1;
         return 0;
       });
-  }, [serviceGroups, searchQuery, hiddenIds, showHidden]);
+  }, [serviceGroups, searchQuery, hiddenIds, showHidden, filterDependabotOnly]);
 
   return (
     <main className="container mx-auto px-4 py-8 max-w-7xl">
       <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
-            GitHub Apps Manager
+            MyApps Manager
           </h1>
           {lastUpdated && !error && (
             <p className="text-sm text-slate-500 mt-1">
@@ -140,6 +142,18 @@ export default function Dashboard() {
             )}
           </div>
           <div className="flex items-center gap-1 border-l border-slate-200 dark:border-slate-800 ml-2 pl-2">
+            <button
+              onClick={() => setFilterDependabotOnly(!filterDependabotOnly)}
+              className={cn(
+                "p-2 transition-colors rounded-md flex items-center gap-1",
+                filterDependabotOnly
+                  ? "text-amber-600 bg-amber-50 dark:bg-amber-900/30"
+                  : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              )}
+              title={filterDependabotOnly ? "すべてのアイテムを表示" : "Dependabot アラートありのみ表示"}
+            >
+              <ShieldAlert className="w-5 h-5" />
+            </button>
             <button
               onClick={() => setShowHidden(!showHidden)}
               className={cn(
@@ -209,6 +223,9 @@ export default function Dashboard() {
                   repoUrl={group.repoUrl}
                   issueUrl={group.issueUrl}
                   julesUrl={group.julesUrl}
+                  hasDependabotAlerts={group.hasDependabotAlerts}
+                  dependabotAlertsCount={group.dependabotAlertsCount}
+                  dependabotUrl={group.dependabotUrl}
                   isHidden={hiddenIds.has(group.baseName)}
                   onToggleHide={toggleHide}
                 />

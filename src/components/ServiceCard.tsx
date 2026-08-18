@@ -1,5 +1,5 @@
 import React from "react";
-import { Github, MessageSquare, ListTodo, Globe, ExternalLink, Zap, Eye, EyeOff } from "lucide-react";
+import { Github, MessageSquare, ListTodo, Globe, ExternalLink, Zap, Eye, EyeOff, ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ServiceInstance } from "@/lib/types";
 
@@ -12,6 +12,9 @@ interface ServiceCardProps {
   repoUrl?: string;
   issueUrl?: string;
   julesUrl?: string;
+  hasDependabotAlerts?: boolean;
+  dependabotAlertsCount?: number;
+  dependabotUrl?: string;
   isHidden?: boolean;
   onToggleHide?: (baseName: string) => void;
 }
@@ -71,6 +74,9 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({
   repoUrl,
   issueUrl,
   julesUrl,
+  hasDependabotAlerts,
+  dependabotAlertsCount,
+  dependabotUrl,
   isHidden = false,
   onToggleHide,
 }) => {
@@ -98,6 +104,18 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({
                   <Eye className="w-4 h-4" />
                 )}
               </button>
+            )}
+            {hasDependabotAlerts && dependabotUrl && (
+              <a
+                href={dependabotUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:hover:bg-amber-900/80 rounded-full transition-colors shrink-0"
+                title={`Dependabot alert (${dependabotAlertsCount ?? 1})`}
+              >
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                <span>Dependabot{dependabotAlertsCount !== undefined && dependabotAlertsCount > 0 ? ` (${dependabotAlertsCount})` : ""}</span>
+              </a>
             )}
           </div>
           <div className="flex gap-4 shrink-0">
