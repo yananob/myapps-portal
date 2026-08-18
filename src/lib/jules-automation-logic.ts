@@ -102,7 +102,7 @@ export async function executeJulesAutomation(
     source: string;
     title: string;
     prompt: string;
-    taskType: "template-sync" | "refactor";
+    taskType: "template-sync" | "refactor" | "dependabot";
     repo: string;
   }[] = [];
 
@@ -147,6 +147,22 @@ export async function executeJulesAutomation(
         title: `[Jules] Daily Refactoring for ${repoName}`,
         prompt: `Analyze this repository and perform general refactoring. This includes cleaning up unused code, simplifying complex functions, updating outdated patterns, optimizing performance, and ensuring a clean and consistent coding style throughout the codebase. Finally, prepare a Pull Request with your improvements.`,
         taskType: "refactor",
+        repo: repoName,
+      });
+    }
+  }
+
+  // --- タスク 3: Dependabot アラート自動修正の計画 ---
+  if (task === "dependabot" || task === "all") {
+    for (const child of selectedChildSources) {
+      const repoName = child.githubRepo?.repo || "";
+      if (!repoName) continue;
+
+      sessionsToCreate.push({
+        source: child.name,
+        title: `[Jules] Fix Dependabot Security Vulnerabilities for ${repoName}`,
+        prompt: `Check for open Dependabot alerts or security vulnerabilities in dependencies in this repository. Update the vulnerable packages to safe versions, ensure all tests pass and there are no breaking changes, and create a Pull Request with the fix.`,
+        taskType: "dependabot",
         repo: repoName,
       });
     }

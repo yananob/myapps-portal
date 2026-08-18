@@ -12,4 +12,16 @@ export interface ServiceGroup {
   repoUrl?: string;
   issueUrl?: string;
   julesUrl?: string;
+  hasDependabotAlerts?: boolean;
+  dependabotAlertsCount?: number;
+  dependabotUrl?: string;
+}
+
+export interface GitHubRepoInfo {
+  repoUrl: string;
+  issueUrl: string;
+  julesUrl: string;
+  hasDependabotAlerts?: boolean;
+  dependabotAlertsCount?: number;
+  dependabotUrl?: string;
 }

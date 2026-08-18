@@ -276,11 +276,11 @@ describe("Jules Automation API エンドポイントのテスト", () => {
 
     const body = await response.json();
     expect(body.dryRun).toBe(false);
-    expect(body.succeeded).toHaveLength(3); // app-one に対する template-sync 2件 + refactor 1件
+    expect(body.succeeded).toHaveLength(4); // app-one に対する template-sync 2件 + refactor 1件 + dependabot 1件
     expect(body.failed).toHaveLength(0);
 
     // Jules API セッション作成が呼び出されたことを検証
-    expect(createJulesSession).toHaveBeenCalledTimes(3);
+    expect(createJulesSession).toHaveBeenCalledTimes(4);
 
     // Firestoreの最終実行日時更新が 'app-one' に対して呼び出されたことを検証
     expect(updateRepoLastExecutedTime).toHaveBeenCalledWith("app-one");
@@ -309,6 +309,32 @@ describe("Jules Automation API エンドポイントのテスト", () => {
     const body = await response.json();
     expect(body.sessions).toHaveLength(1);
     expect(body.sessions[0].taskType).toBe("refactor");
+  });
+
+  it("task=dependabot を指定した場合に Dependabot 自動修正タスクのみが作成されること", async () => {
+    const mockSources = [
+      {
+        name: "sources/github/test-owner/_template",
+        id: "github/test-owner/_template",
+        githubRepo: { owner: "test-owner", repo: "_template" },
+      },
+      {
+        name: "sources/github/test-owner/app-one",
+        id: "github/test-owner/app-one",
+        githubRepo: { owner: "test-owner", repo: "app-one" },
+      },
+    ];
+
+    vi.mocked(listAllJulesSources).mockResolvedValue(mockSources);
+
+    const request = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=true&task=dependabot");
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body.sessions).toHaveLength(1);
+    expect(body.sessions[0].taskType).toBe("dependabot");
+    expect(body.sessions[0].title).toContain("Fix Dependabot Security Vulnerabilities");
   });
 
   it("Pub/Sub メッセージボディ内のパラメータを正しく処理できること", async () => {

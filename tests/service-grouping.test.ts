@@ -12,7 +12,7 @@ describe('groupServices', () => {
     ]
 
     const repoMap = new Map([
-      ['app', { repoUrl: 'https://github/app', issueUrl: 'https://github/app/issues', julesUrl: 'https://jules/app' }],
+      ['app', { repoUrl: 'https://github/app', issueUrl: 'https://github/app/issues', julesUrl: 'https://jules/app', hasDependabotAlerts: true, dependabotAlertsCount: 3, dependabotUrl: 'https://github/app/security/dependabot' }],
     ])
 
     const result = groupServices(services, repoMap)
@@ -26,6 +26,9 @@ describe('groupServices', () => {
     expect(appGroup?.event?.url).toBe('https://app-event')
     expect(appGroup?.testEvent?.url).toBe('https://app-test-event')
     expect(appGroup?.repoUrl).toBe('https://github/app')
+    expect(appGroup?.hasDependabotAlerts).toBe(true)
+    expect(appGroup?.dependabotAlertsCount).toBe(3)
+    expect(appGroup?.dependabotUrl).toBe('https://github/app/security/dependabot')
 
     const otherGroup = result.find(g => g.baseName === 'other')
     expect(otherGroup).toBeDefined()
