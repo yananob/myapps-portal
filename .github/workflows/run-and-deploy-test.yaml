@@ -90,6 +90,15 @@ jobs:
             GCLOUD_SERVICE_ACCOUNT=GCLOUD_SERVICE_ACCOUNT:latest
             JULES_API_KEY=JULES_API_KEY:latest
 
+      - name: 'Allow Public Access to HTTP Function'
+        shell: bash
+        run: |
+          gcloud run services add-iam-policy-binding ${{ needs.prepare-deploy.outputs.http_service_name }} \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --region=${{ secrets.GCP_REGION }} \
+            --member="allUsers" \
+            --role="roles/run.invoker"
+
   # deploy-event:
   #   needs: prepare-deploy
   #   runs-on: ubuntu-latest
