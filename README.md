@@ -70,9 +70,9 @@ Cloud Run サービスとしてデプロイ後、Pub/Sub トピックからの�
 
 #### 動作の仕組み
 1. **Middleware による内部ルーティング**:
-   Pub/Sub の Push サブスクリプションは、Cloud Run のルートパス (`/`) に `POST` リクエストを送信します。Next.js の Middleware (`src/middleware.ts`) がこれを検出すると、内部的に共通バッチ起動エンドポイント (`/api/cleanup`) へリライト (Rewrite) します。
+   Pub/Sub の Push サブスクリプションは、Cloud Run のルートパス (`/`) に `POST` リクエストを送信します。Next.js の Middleware (`src/middleware.ts`) がこれを検出すると、内部的に専用イベントルーティングエンドポイント (`/api/events`) へリライト (Rewrite) します。
 2. **バッチ処理のディスパッチ**:
-   `/api/cleanup` はリクエスト内の Pub/Sub データ（`message.data` を Base64 デコードした JSON）をパースし、指定された `command` パラメータに応じて以下の処理を実行します。
+   `/api/events` (および `src/lib/event-router.ts`) はリクエスト内の Pub/Sub データ（`message.data` を Base64 デコードした JSON）やパラメータをパースし、指定された `command` パラメータに応じて以下の処理を実行・ディスパッチします。
    - `command: "cleanup"` (デフォルト): 24時間以上更新のないテスト環境サービス (`-test`, `-test-event`) の削除処理。
    - `command: "jules-automation"`: Jules (AIエンジニア) への自動タスク（テンプレート同期・リファクタリング）作成処理。
 

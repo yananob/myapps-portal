@@ -24,14 +24,14 @@ describe("Middleware", () => {
     } as unknown as NextRequest;
   };
 
-  it("should rewrite POST request on root (/) to /api/cleanup", () => {
+  it("should rewrite POST request on root (/) to /api/events", () => {
     const request = createMockRequest("POST", "https://example.com/");
     const result = middleware(request);
 
     expect(NextResponse.rewrite).toHaveBeenCalled();
     expect(result).toEqual({
       status: "rewrite",
-      url: "https://example.com/api/cleanup",
+      url: "https://example.com/api/events",
     });
   });
 
@@ -42,7 +42,7 @@ describe("Middleware", () => {
     expect(NextResponse.rewrite).toHaveBeenCalled();
     expect(result).toEqual({
       status: "rewrite",
-      url: "https://example.com/api/cleanup?dryRun=false&foo=bar",
+      url: "https://example.com/api/events?dryRun=false&foo=bar",
     });
   });
 
