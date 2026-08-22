@@ -108,7 +108,7 @@ describe("Jules Automation API エンドポイントのテスト", () => {
     expect(body.message).toBe("No repositories found for the specified owner in Jules sources.");
   });
 
-  it("Dry-run モードでタスク1とタスク2がシミュレートされ、デフォルトの制限(最大3個)で実行されること", async () => {
+  it("Dry-run モードでタスク1とタスク2がシミュレートされ、デフォルトの制限(1個)で実行されること", async () => {
     // モックのJulesソースを用意
     const mockSources = [
       {
@@ -140,23 +140,23 @@ describe("Jules Automation API エンドポイントのテスト", () => {
 
     vi.mocked(listAllJulesSources).mockResolvedValue(mockSources);
 
-    // limitパラメータなし => デフォルト3
+    // limitパラメータなし => デフォルト1
     const request = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=true&task=all");
     const response = await POST(request);
     expect(response.status).toBe(200);
 
     const body = await response.json();
     expect(body.dryRun).toBe(true);
-    expect(body.selectedRepos).toHaveLength(3); // 最大3つのリポジトリに制限される
-    expect(body.selectedRepos).toEqual(["app-four", "app-one", "app-three"]); // 履歴なしの場合は辞書順(four, one, three)
+    expect(body.selectedRepos).toHaveLength(1); // デフォルトで1つのリポジトリに制限される
+    expect(body.selectedRepos).toEqual(["app-four"]); // 履歴なしの場合は辞書順先頭(four)
 
-    // タスク1(template-sync) は 3つの子リポジトリに対して、それぞれ子→テンプとテンプ→子の2本＝計6本想定
+    // タスク1(template-sync) は 1つの子リポジトリに対して、それぞれ子→テンプとテンプ→子の2本＝計2本想定
     const templateSyncs = body.sessions.filter((s: any) => s.taskType === "template-sync");
-    expect(templateSyncs).toHaveLength(6);
+    expect(templateSyncs).toHaveLength(2);
 
-    // タスク2(refactor) は 3つの子リポジトリに対して、それぞれ1件 = 計3本想定
+    // タスク2(refactor) は 1つの子リポジトリに対して1件 = 計1本想定
     const refactors = body.sessions.filter((s: any) => s.taskType === "refactor");
-    expect(refactors).toHaveLength(3);
+    expect(refactors).toHaveLength(1);
 
     expect(createJulesSession).not.toHaveBeenCalled();
   });
