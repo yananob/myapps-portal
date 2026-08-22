@@ -108,7 +108,7 @@ describe("Jules Automation API エンドポイントのテスト", () => {
     expect(body.message).toBe("No repositories found for the specified owner in Jules sources.");
   });
 
-  it("Dry-run モードでタスク1とタスク2がシミュレートされ、デフォルトの制限(1個)で実行されること", async () => {
+  it("Dry-run モードでリファクタリングタスクがシミュレートされ、デフォルトの制限(1個)で実行されること", async () => {
     // モックのJulesソースを用意
     const mockSources = [
       {
@@ -141,7 +141,7 @@ describe("Jules Automation API エンドポイントのテスト", () => {
     vi.mocked(listAllJulesSources).mockResolvedValue(mockSources);
 
     // limitパラメータなし => デフォルト1
-    const request = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=true&task=all");
+    const request = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=true");
     const response = await POST(request);
     expect(response.status).toBe(200);
 
@@ -150,13 +150,9 @@ describe("Jules Automation API エンドポイントのテスト", () => {
     expect(body.selectedRepos).toHaveLength(1); // デフォルトで1つのリポジトリに制限される
     expect(body.selectedRepos).toEqual(["app-four"]); // 履歴なしの場合は辞書順先頭(four)
 
-    // タスク1(template-sync) は 1つの子リポジトリに対して、それぞれ子→テンプとテンプ→子の2本＝計2本想定
-    const templateSyncs = body.sessions.filter((s: any) => s.taskType === "template-sync");
-    expect(templateSyncs).toHaveLength(2);
-
-    // タスク2(refactor) は 1つの子リポジトリに対して1件 = 計1本想定
-    const refactors = body.sessions.filter((s: any) => s.taskType === "refactor");
-    expect(refactors).toHaveLength(1);
+    // セッションはリファクタリング1本想定
+    expect(body.sessions).toHaveLength(1);
+    expect(body.sessions[0].taskType).toBe("refactor");
 
     expect(createJulesSession).not.toHaveBeenCalled();
   });
@@ -183,22 +179,25 @@ describe("Jules Automation API エンドポイントのテスト", () => {
     vi.mocked(listAllJulesSources).mockResolvedValue(mockSources);
 
     // limit=1 の場合
-    const request1 = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=true&task=all&limit=1");
+    const request1 = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=true&limit=1");
     const response1 = await POST(request1);
     const body1 = await response1.json();
     expect(body1.selectedRepos).toHaveLength(1);
+    expect(body1.sessions).toHaveLength(1);
 
     // limit=5 の場合 => 最大値である 3 にクランプされる
-    const request5 = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=true&task=all&limit=5");
+    const request5 = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=true&limit=5");
     const response5 = await POST(request5);
     const body5 = await response5.json();
-    expect(body5.selectedRepos).toHaveLength(2); // 子リポジトリが2つしかないので2つ
+    expect(body5.selectedRepos).toHaveLength(2); // _template以外の対象リポジトリが2つしかないので2つ
+    expect(body5.sessions).toHaveLength(2);
 
     // limit=0 の場合 => 最小値である 1 にクランプされる
-    const request0 = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=true&task=all&limit=0");
+    const request0 = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=true&limit=0");
     const response0 = await POST(request0);
     const body0 = await response0.json();
     expect(body0.selectedRepos).toHaveLength(1);
+    expect(body0.sessions).toHaveLength(1);
   });
 
   it("Firestore上の最終実行日時履歴に基づいて、最終実行が古いリポジトリが優先的に選択されること", async () => {
@@ -238,7 +237,7 @@ describe("Jules Automation API エンドポイントのテスト", () => {
     });
 
     // 制限 2個で実行した場合：未実行の app-three（最優先）と、24時間前の app-two が選ばれるはず（app-oneは除外）
-    const request = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=true&task=all&limit=2");
+    const request = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=true&limit=2");
     const response = await POST(request);
     const body = await response.json();
 
@@ -270,71 +269,20 @@ describe("Jules Automation API エンドポイントのテスト", () => {
       };
     });
 
-    const request = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=false&task=all");
+    const request = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=false");
     const response = await POST(request);
     expect(response.status).toBe(200);
 
     const body = await response.json();
     expect(body.dryRun).toBe(false);
-    expect(body.succeeded).toHaveLength(4); // app-one に対する template-sync 2件 + refactor 1件 + dependabot 1件
+    expect(body.succeeded).toHaveLength(1); // app-one に対する refactor 1件
     expect(body.failed).toHaveLength(0);
 
     // Jules API セッション作成が呼び出されたことを検証
-    expect(createJulesSession).toHaveBeenCalledTimes(4);
+    expect(createJulesSession).toHaveBeenCalledTimes(1);
 
     // Firestoreの最終実行日時更新が 'app-one' に対して呼び出されたことを検証
     expect(updateRepoLastExecutedTime).toHaveBeenCalledWith("app-one");
-  });
-
-  it("特定のタスクのみを指定して実行できること (task=refactor)", async () => {
-    const mockSources = [
-      {
-        name: "sources/github/test-owner/_template",
-        id: "github/test-owner/_template",
-        githubRepo: { owner: "test-owner", repo: "_template" },
-      },
-      {
-        name: "sources/github/test-owner/app-one",
-        id: "github/test-owner/app-one",
-        githubRepo: { owner: "test-owner", repo: "app-one" },
-      },
-    ];
-
-    vi.mocked(listAllJulesSources).mockResolvedValue(mockSources);
-
-    const request = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=true&task=refactor");
-    const response = await POST(request);
-    expect(response.status).toBe(200);
-
-    const body = await response.json();
-    expect(body.sessions).toHaveLength(1);
-    expect(body.sessions[0].taskType).toBe("refactor");
-  });
-
-  it("task=dependabot を指定した場合に Dependabot 自動修正タスクのみが作成されること", async () => {
-    const mockSources = [
-      {
-        name: "sources/github/test-owner/_template",
-        id: "github/test-owner/_template",
-        githubRepo: { owner: "test-owner", repo: "_template" },
-      },
-      {
-        name: "sources/github/test-owner/app-one",
-        id: "github/test-owner/app-one",
-        githubRepo: { owner: "test-owner", repo: "app-one" },
-      },
-    ];
-
-    vi.mocked(listAllJulesSources).mockResolvedValue(mockSources);
-
-    const request = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=true&task=dependabot");
-    const response = await POST(request);
-    expect(response.status).toBe(200);
-
-    const body = await response.json();
-    expect(body.sessions).toHaveLength(1);
-    expect(body.sessions[0].taskType).toBe("dependabot");
-    expect(body.sessions[0].title).toContain("Fix Dependabot Security Vulnerabilities");
   });
 
   it("Pub/Sub メッセージボディ内のパラメータを正しく処理できること", async () => {
