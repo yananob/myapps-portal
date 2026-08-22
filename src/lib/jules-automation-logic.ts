@@ -38,8 +38,8 @@ export async function executeJulesAutomation(
   const dryRun = options.dryRun !== false; // デフォルトは安全のため true
   const task = options.task || "all";
 
-  // 起動1回あたりの実行リポジトリ数制限（デフォルト3、範囲1〜3）
-  let limit = 3;
+  // 起動1回あたりの実行リポジトリ数制限（デフォルト1、範囲1〜3）
+  let limit = 1;
   if (options.limit !== undefined && options.limit !== null && !isNaN(options.limit)) {
     limit = Math.max(1, Math.min(3, options.limit));
   }
@@ -186,22 +186,27 @@ export async function executeJulesAutomation(
   console.log(`Jules API を使用して、${sessionsToCreate.length}件のセッションの作成を開始します。`);
   const results = await Promise.allSettled(
     sessionsToCreate.map(async (session) => {
-      console.log(`セッションを作成中: ${session.title}`);
-      const res = await createJulesSession(julesApiKey, {
-        prompt: session.prompt,
-        sourceContext: {
-          source: session.source,
-        },
-        automationMode: "AUTO_CREATE_PR",
-        title: session.title,
-      });
-      return {
-        sessionName: res.name,
-        sessionId: res.id,
-        title: res.title,
-        repo: session.repo,
-        taskType: session.taskType,
-      };
+      console.log(`セッションを作成中: [${session.taskType}] ${session.title} (Repo: ${session.repo}, Source: ${session.source})`);
+      try {
+        const res = await createJulesSession(julesApiKey, {
+          prompt: session.prompt,
+          sourceContext: {
+            source: session.source,
+          },
+          automationMode: "AUTO_CREATE_PR",
+          title: session.title,
+        });
+        return {
+          sessionName: res.name,
+          sessionId: res.id,
+          title: res.title,
+          repo: session.repo,
+          taskType: session.taskType,
+        };
+      } catch (err: any) {
+        console.error(`セッション作成失敗 [${session.taskType}] (${session.title}):`, err?.message || err);
+        throw err;
+      }
     })
   );
 
@@ -212,6 +217,13 @@ export async function executeJulesAutomation(
   const failed = results
     .filter((r): r is PromiseRejectedResult => r.status === "rejected")
     .map((r) => r.reason?.message || String(r.reason));
+
+  if (failed.length > 0) {
+    console.error(`Jules セッション作成でエラーが発生した件数: ${failed.length}件`);
+    failed.forEach((err, idx) => {
+      console.error(`- 失敗詳細 [${idx + 1}]: ${err}`);
+    });
+  }
 
   // 成功したセッションに関連する子リポジトリの一覧を特定し、Firestore を更新
   const succeededRepos = new Set<string>();

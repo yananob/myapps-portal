@@ -50,6 +50,8 @@ export async function listAllJulesSources(apiKey: string): Promise<JulesSource[]
   let sources: JulesSource[] = [];
   let pageToken = "";
 
+  console.log("[JulesClient] Jules ソース一覧の取得を開始します...");
+
   do {
     const url = new URL("https://jules.googleapis.com/v1alpha/sources");
     if (pageToken) {
@@ -65,6 +67,7 @@ export async function listAllJulesSources(apiKey: string): Promise<JulesSource[]
 
     if (!res.ok) {
       const errText = await res.text();
+      console.error(`[JulesClient] Jules API ソース一覧の取得に失敗しました: Status=${res.status} ${res.statusText}, Response=${errText}`);
       throw new Error(`Jules API ソース一覧の取得に失敗しました: ${res.status} ${res.statusText} - ${errText}`);
     }
 
@@ -75,6 +78,7 @@ export async function listAllJulesSources(apiKey: string): Promise<JulesSource[]
     pageToken = data.nextPageToken || "";
   } while (pageToken);
 
+  console.log(`[JulesClient] Jules ソース一覧の取得に成功しました。合計: ${sources.length}件`);
   return sources;
 }
 
@@ -92,6 +96,8 @@ export async function createJulesSession(
 ): Promise<JulesSession> {
   const url = "https://jules.googleapis.com/v1alpha/sessions";
 
+  console.log(`[JulesClient] Jules セッション作成リクエストを送信中... (Source: ${req.sourceContext?.source}, Title: ${req.title || "無題"})`);
+
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -103,8 +109,11 @@ export async function createJulesSession(
 
   if (!res.ok) {
     const errText = await res.text();
+    console.error(`[JulesClient] Jules セッションの作成に失敗しました: Status=${res.status} ${res.statusText}, Response=${errText}, RequestPayload=${JSON.stringify(req)}`);
     throw new Error(`Jules セッションの作成に失敗しました: ${res.status} ${res.statusText} - ${errText}`);
   }
 
-  return res.json();
+  const sessionData: JulesSession = await res.json();
+  console.log(`[JulesClient] Jules セッションの作成に成功しました: Name=${sessionData.name}, ID=${sessionData.id}`);
+  return sessionData;
 }
