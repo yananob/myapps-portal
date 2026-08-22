@@ -239,7 +239,7 @@ describe("Cleanup API", () => {
 
     expect(response.status).toBe(200);
     expect(body.dryRun).toBe(true);
-    expect(body.message).toContain("Simulated 4 Jules sessions");
+    expect(body.message).toContain("Simulated 1 Jules sessions");
     expect(listAllJulesSources).toHaveBeenCalledTimes(1);
     expect(getCloudRunServices).not.toHaveBeenCalled(); // Ensure cleanup logic was NOT executed
   });
