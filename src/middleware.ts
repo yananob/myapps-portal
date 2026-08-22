@@ -5,9 +5,9 @@ export function middleware(request: NextRequest) {
   const url = request.nextUrl;
 
   // Root path (/) receives POST requests from Pub/Sub / Eventarc
-  // Rewrite them to /api/cleanup with existing query parameters preserved
+  // Rewrite them to /api/events with existing query parameters preserved
   if (request.method === "POST" && url.pathname === "/") {
-    url.pathname = "/api/cleanup";
+    url.pathname = "/api/events";
     return NextResponse.rewrite(url);
   }
 
