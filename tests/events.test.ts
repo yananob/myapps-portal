@@ -121,7 +121,7 @@ describe("Events API Route", () => {
 
     expect(response.status).toBe(200);
     expect(body.dryRun).toBe(true);
-    expect(body.message).toContain("Simulated 4 Jules sessions");
+    expect(body.message).toContain("Simulated 1 Jules sessions");
     expect(listAllJulesSources).toHaveBeenCalledTimes(1);
   });
 
