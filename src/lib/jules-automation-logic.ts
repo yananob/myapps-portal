@@ -61,9 +61,9 @@ export async function executeJulesAutomation(
     };
   }
 
-  // テンプレートリポジトリ（_template）は自動リファクタリングの対象から除外
+  // アンダースコアで始まるプレフィックス付きリポジトリ（_template, _manage-repos 等）は自動リファクタリングの対象から除外
   const targetSources = ownerSources.filter(
-    (source) => source.githubRepo?.repo.toLowerCase() !== "_template"
+    (source) => !source.githubRepo?.repo.startsWith("_")
   );
 
   if (targetSources.length === 0) {

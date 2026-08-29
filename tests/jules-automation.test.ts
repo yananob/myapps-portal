@@ -108,13 +108,18 @@ describe("Jules Automation API エンドポイントのテスト", () => {
     expect(body.message).toBe("No repositories found for the specified owner in Jules sources.");
   });
 
-  it("Dry-run モードでリファクタリングタスクがシミュレートされ、デフォルトの制限(1個)で実行されること", async () => {
+  it("アンダースコアで始まるプレフィックス付きリポジトリ（_manage-repos, _template等）が除外され、Dry-run モードでリファクタリングタスクがシミュレートされること", async () => {
     // モックのJulesソースを用意
     const mockSources = [
       {
         name: "sources/github/test-owner/_template",
         id: "github/test-owner/_template",
         githubRepo: { owner: "test-owner", repo: "_template" },
+      },
+      {
+        name: "sources/github/test-owner/_manage-repos",
+        id: "github/test-owner/_manage-repos",
+        githubRepo: { owner: "test-owner", repo: "_manage-repos" },
       },
       {
         name: "sources/github/test-owner/app-one",
