@@ -1,5 +1,6 @@
 import { listAllJulesSources, createJulesSession } from "./jules-client";
 import { getRepoLastExecutedTimes, updateRepoLastExecutedTime } from "./firestore-client";
+import { getRepoDefaultBranch } from "./github-client";
 
 /**
  * Jules 自動化処理のオプション
@@ -100,6 +101,7 @@ export async function executeJulesAutomation(
     prompt: string;
     taskType: "refactor";
     repo: string;
+    startingBranch: string;
   }[] = [];
 
   // --- リファクタリングの計画 ---
@@ -107,12 +109,15 @@ export async function executeJulesAutomation(
     const repoName = target.githubRepo?.repo || "";
     if (!repoName) continue;
 
+    const startingBranch = await getRepoDefaultBranch(githubOwner, repoName);
+
     sessionsToCreate.push({
       source: target.name,
       title: `[Jules] Daily Refactoring for ${repoName}`,
       prompt: `Analyze this repository and perform general refactoring. This includes cleaning up unused code, simplifying complex functions, updating outdated patterns, optimizing performance, and ensuring a clean and consistent coding style throughout the codebase. Finally, prepare a Pull Request with your improvements.`,
       taskType: "refactor",
       repo: repoName,
+      startingBranch,
     });
   }
 
@@ -140,6 +145,9 @@ export async function executeJulesAutomation(
           prompt: session.prompt,
           sourceContext: {
             source: session.source,
+            githubRepoContext: {
+              startingBranch: session.startingBranch,
+            },
           },
           automationMode: "AUTO_CREATE_PR",
           title: session.title,
