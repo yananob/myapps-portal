@@ -57,7 +57,7 @@ describe("Jules Automation API エンドポイントのテスト", () => {
     // FirestoreおよびGitHubのデフォルトモック
     vi.mocked(getRepoLastExecutedTimes).mockResolvedValue({});
     vi.mocked(updateRepoLastExecutedTime).mockResolvedValue(undefined);
-    vi.mocked(getRepoDefaultBranch).mockResolvedValue("main");
+    vi.mocked(getRepoDefaultBranch).mockResolvedValue("test");
   });
 
   const createRequest = (

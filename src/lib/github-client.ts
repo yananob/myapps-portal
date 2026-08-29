@@ -88,11 +88,11 @@ export async function getAllReposInfo(): Promise<Map<string, GitHubRepoInfo>> {
 
 /**
  * 指定されたリポジトリのデフォルトブランチ（default_branch）を取得します。
- * 取得に失敗した場合や GITHUB_PAT が未設定の場合はデフォルトで "main" を返します。
+ * 取得に失敗した場合や GITHUB_PAT が未設定の場合はデフォルトで "test" を返します。
  *
  * @param owner GitHub オーナー名（ユーザーまたは組織）
  * @param repo リポジトリ名
- * @returns デフォルトブランチ名（例: "main", "master"）
+ * @returns デフォルトブランチ名（例: "test", "main"）
  */
 export async function getRepoDefaultBranch(
   owner: string,
@@ -106,12 +106,12 @@ export async function getRepoDefaultBranch(
       owner,
       repo,
     });
-    return response.data.default_branch || "main";
+    return response.data.default_branch || "test";
   } catch (error) {
     console.warn(
-      `[GitHubClient] リポジトリ (${owner}/${repo}) のデフォルトブランチ取得に失敗しました。フォールバックとして 'main' を使用します:`,
+      `[GitHubClient] リポジトリ (${owner}/${repo}) のデフォルトブランチ取得に失敗しました。フォールバックとして 'test' を使用します:`,
       error
     );
-    return "main";
+    return "test";
   }
 }

@@ -89,12 +89,12 @@ describe('getAllReposInfo', () => {
       expect(branch).toBe('develop')
     })
 
-    it('falls back to "main" if GitHub API call fails', async () => {
+    it('falls back to "test" if GitHub API call fails', async () => {
       const octokitInstance = new Octokit()
       vi.mocked(octokitInstance.rest.repos.get).mockRejectedValue(new Error('API Error'))
 
       const branch = await getRepoDefaultBranch('test-owner', 'test-repo')
-      expect(branch).toBe('main')
+      expect(branch).toBe('test')
     })
   })
 })
