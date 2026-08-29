@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { listAllJulesSources, createJulesSession } from "@/lib/jules-client";
 import { getRepoLastExecutedTimes, updateRepoLastExecutedTime, getRootCollectionName } from "@/lib/firestore-client";
+import { getRepoDefaultBranch } from "@/lib/github-client";
 import { POST } from "@/app/api/jules-automation/route";
 import { NextRequest } from "next/server";
 
@@ -8,6 +9,11 @@ import { NextRequest } from "next/server";
 vi.mock("@/lib/jules-client", () => ({
   listAllJulesSources: vi.fn(),
   createJulesSession: vi.fn(),
+}));
+
+// GitHubクライアントの依存モジュールをモック
+vi.mock("@/lib/github-client", () => ({
+  getRepoDefaultBranch: vi.fn(),
 }));
 
 // Firestoreクライアントの依存モジュールをモック
@@ -48,9 +54,10 @@ describe("Jules Automation API エンドポイントのテスト", () => {
     process.env.JULES_API_KEY = "test-jules-key";
     process.env.GITHUB_OWNER = "test-owner";
 
-    // Firestoreのデフォルトモック
+    // FirestoreおよびGitHubのデフォルトモック
     vi.mocked(getRepoLastExecutedTimes).mockResolvedValue({});
     vi.mocked(updateRepoLastExecutedTime).mockResolvedValue(undefined);
+    vi.mocked(getRepoDefaultBranch).mockResolvedValue("main");
   });
 
   const createRequest = (
@@ -269,6 +276,8 @@ describe("Jules Automation API エンドポイントのテスト", () => {
       };
     });
 
+    vi.mocked(getRepoDefaultBranch).mockResolvedValue("develop");
+
     const request = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=false");
     const response = await POST(request);
     expect(response.status).toBe(200);
@@ -278,8 +287,19 @@ describe("Jules Automation API エンドポイントのテスト", () => {
     expect(body.succeeded).toHaveLength(1); // app-one に対する refactor 1件
     expect(body.failed).toHaveLength(0);
 
-    // Jules API セッション作成が呼び出されたことを検証
+    // Jules API セッション作成が呼び出され、sourceContext.githubRepoContext.startingBranch が指定されたことを検証
     expect(createJulesSession).toHaveBeenCalledTimes(1);
+    expect(createJulesSession).toHaveBeenCalledWith(
+      "test-jules-key",
+      expect.objectContaining({
+        sourceContext: {
+          source: "sources/github/test-owner/app-one",
+          githubRepoContext: {
+            startingBranch: "develop",
+          },
+        },
+      })
+    );
 
     // Firestoreの最終実行日時更新が 'app-one' に対して呼び出されたことを検証
     expect(updateRepoLastExecutedTime).toHaveBeenCalledWith("app-one");

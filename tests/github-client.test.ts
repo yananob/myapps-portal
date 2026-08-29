@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { getAllReposInfo } from '../src/lib/github-client'
+import { getAllReposInfo, getRepoDefaultBranch } from '../src/lib/github-client'
 import { Octokit } from 'octokit'
 
 vi.mock('octokit', () => {
@@ -7,6 +7,7 @@ vi.mock('octokit', () => {
   Octokit.prototype.rest = {
     repos: {
       listForAuthenticatedUser: vi.fn(),
+      get: vi.fn(),
     }
   }
   Octokit.prototype.paginate = vi.fn()
@@ -75,5 +76,25 @@ describe('getAllReposInfo', () => {
   it('throws error if GITHUB_OWNER is not set', async () => {
     delete process.env.GITHUB_OWNER
     await expect(getAllReposInfo()).rejects.toThrow('GITHUB_OWNER is not set')
+  })
+
+  describe('getRepoDefaultBranch', () => {
+    it('returns default_branch from GitHub API', async () => {
+      const octokitInstance = new Octokit()
+      vi.mocked(octokitInstance.rest.repos.get).mockResolvedValue({
+        data: { default_branch: 'develop' }
+      } as any)
+
+      const branch = await getRepoDefaultBranch('test-owner', 'test-repo')
+      expect(branch).toBe('develop')
+    })
+
+    it('falls back to "main" if GitHub API call fails', async () => {
+      const octokitInstance = new Octokit()
+      vi.mocked(octokitInstance.rest.repos.get).mockRejectedValue(new Error('API Error'))
+
+      const branch = await getRepoDefaultBranch('test-owner', 'test-repo')
+      expect(branch).toBe('main')
+    })
   })
 })
