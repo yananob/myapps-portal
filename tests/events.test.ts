@@ -56,6 +56,18 @@ describe("Events API Route", () => {
     expect(response.status).toBe(401);
   });
 
+  it("should allow same-origin requests from dashboard UI without bearer token", async () => {
+    const request = createRequest(
+      undefined,
+      "http://localhost/api/events",
+      { "sec-fetch-site": "same-origin" }
+    );
+    vi.mocked(getCloudRunServices).mockResolvedValue([]);
+
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+  });
+
   it("should dispatch to cleanup by default when no command is specified", async () => {
     const request = createRequest("Bearer test-secret");
     const now = new Date();
