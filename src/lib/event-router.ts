@@ -102,14 +102,50 @@ export function verifyEventAuth(request: NextRequest): { authorized: boolean; er
   const authHeader = request.headers.get("Authorization");
   const cronSecret = process.env.CRON_SECRET;
 
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return {
-      authorized: false,
-      errorResponse: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
-    };
+  if (cronSecret && authHeader === `Bearer ${cronSecret}`) {
+    return { authorized: true };
   }
 
-  return { authorized: true };
+  // 同一オリジン（ダッシュボード画面）からのリクエストを許可
+  const secFetchSite = request.headers.get("sec-fetch-site");
+  if (secFetchSite === "same-origin" || secFetchSite === "same-site") {
+    return { authorized: true };
+  }
+
+  const host = request.headers.get("host");
+  const origin = request.headers.get("origin");
+  const referer = request.headers.get("referer");
+
+  if (host) {
+    if (origin) {
+      try {
+        if (new URL(origin).host === host) {
+          return { authorized: true };
+        }
+      } catch (e) {
+        // 無効なURLの場合は無視
+      }
+    }
+    if (referer) {
+      try {
+        if (new URL(referer).host === host) {
+          return { authorized: true };
+        }
+      } catch (e) {
+        // 無効なURLの場合は無視
+      }
+    }
+  }
+
+  // CRON_SECRET が未設定の場合は認証スキップ（開発・互換用）
+  if (!cronSecret) {
+    return { authorized: true };
+  }
+
+  return {
+    authorized: false,
+    errorResponse: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+  };
 }
 
 /**

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Search, Loader2, RefreshCw, AlertCircle, X, Eye, EyeOff, ShieldAlert } from "lucide-react";
+import { Search, Loader2, RefreshCw, AlertCircle, X, Eye, EyeOff, ShieldAlert, Zap, Play } from "lucide-react";
 import { ServiceCard } from "@/components/ServiceCard";
 import { cn } from "@/lib/utils";
 import { ServiceGroup } from "@/lib/types";
@@ -15,6 +15,47 @@ export default function Dashboard() {
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [showHidden, setShowHidden] = useState(false);
   const [filterDependabotOnly, setFilterDependabotOnly] = useState(false);
+
+  // Jules 自動化ダイアログ用のステート
+  const [isJulesModalOpen, setIsJulesModalOpen] = useState(false);
+  const [julesDryRun, setJulesDryRun] = useState(true);
+  const [julesLimit, setJulesLimit] = useState(1);
+  const [julesTask, setJulesTask] = useState("refactor");
+  const [isExecutingJules, setIsExecutingJules] = useState(false);
+  const [julesResult, setJulesResult] = useState<any | null>(null);
+  const [julesError, setJulesError] = useState<string | null>(null);
+
+  const handleExecuteJules = async () => {
+    setIsExecutingJules(true);
+    setJulesError(null);
+    setJulesResult(null);
+
+    try {
+      const response = await fetch("/api/jules-automation", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          dryRun: julesDryRun,
+          limit: julesLimit,
+          task: julesTask,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        setJulesError(data.error || "Jules 自動化の実行に失敗しました");
+      } else {
+        setJulesResult(data);
+      }
+    } catch (err: any) {
+      console.error("Failed to execute Jules automation:", err);
+      setJulesError(err instanceof Error ? err.message : "予期せぬエラーが発生しました");
+    } finally {
+      setIsExecutingJules(false);
+    }
+  };
 
   const CACHE_KEY = "myapps-portal-cache";
   const CACHE_TIME_KEY = "myapps-portal-cache-time";
@@ -178,6 +219,18 @@ export default function Dashboard() {
             >
               <RefreshCw className={cn("w-5 h-5", loading && "animate-spin")} />
             </button>
+            <button
+              onClick={() => {
+                setJulesResult(null);
+                setJulesError(null);
+                setIsJulesModalOpen(true);
+              }}
+              className="ml-1 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 shadow-sm shrink-0"
+              title="Jules Automation を画面から起動"
+            >
+              <Zap className="w-4 h-4 fill-white" />
+              <span>Run Jules</span>
+            </button>
           </div>
         </div>
       </header>
@@ -195,6 +248,171 @@ export default function Dashboard() {
             <p className="text-xs text-red-600/80 dark:text-red-400/80 mt-2">
               認証エラー（invalid_grant）が発生している場合は、Google Cloud の認証設定やサービスアカウントの権限を確認してください。
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Jules Automation Modal */}
+      {isJulesModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl w-full max-w-lg p-6 relative flex flex-col max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setIsJulesModalOpen(false)}
+              disabled={isExecutingJules}
+              className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-full transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-2 mb-4">
+              <Zap className="w-6 h-6 text-amber-500 fill-amber-500" />
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                Jules Automation
+              </h2>
+            </div>
+
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+              Jules の使用回数が余っている場合に、AI によるリポジトリの自動リファクタリングタスク（PR作成）を画面から起動できます。
+            </p>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleExecuteJules();
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  対象リポジトリ数 (Limit: 1~3)
+                </label>
+                <select
+                  value={julesLimit}
+                  onChange={(e) => setJulesLimit(Number(e.target.value))}
+                  disabled={isExecutingJules}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value={1}>1 リポジトリ</option>
+                  <option value={2}>2 リポジトリ</option>
+                  <option value={3}>3 リポジトリ</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  タスク種別
+                </label>
+                <input
+                  type="text"
+                  value={julesTask}
+                  onChange={(e) => setJulesTask(e.target.value)}
+                  disabled={isExecutingJules}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+                  placeholder="refactor"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="dryRun"
+                  checked={julesDryRun}
+                  onChange={(e) => setJulesDryRun(e.target.checked)}
+                  disabled={isExecutingJules}
+                  className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500"
+                />
+                <label htmlFor="dryRun" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
+                  Dry-run モード（実際のセッション作成は行わずシミュレーション）
+                </label>
+              </div>
+
+              {julesError && (
+                <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg text-xs text-red-700 dark:text-red-300">
+                  {julesError}
+                </div>
+              )}
+
+              {julesResult && (
+                <div className="p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg space-y-2 text-xs text-slate-800 dark:text-slate-200">
+                  <p className="font-semibold text-sm text-slate-900 dark:text-white mb-1">
+                    {julesResult.message}
+                  </p>
+                  {julesResult.selectedRepos && julesResult.selectedRepos.length > 0 && (
+                    <div>
+                      <span className="font-medium">対象リポジトリ:</span>{" "}
+                      {julesResult.selectedRepos.join(", ")}
+                    </div>
+                  )}
+                  {julesResult.sessions && julesResult.sessions.length > 0 && (
+                    <div className="space-y-1 mt-2">
+                      <span className="font-medium">作成予定セッション:</span>
+                      <ul className="list-disc list-inside space-y-0.5 text-slate-600 dark:text-slate-400 pl-1">
+                        {julesResult.sessions.map((s: any, idx: number) => (
+                          <li key={idx}>
+                            {s.title} ({s.repo})
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {julesResult.succeeded && julesResult.succeeded.length > 0 && (
+                    <div className="space-y-1 mt-2">
+                      <span className="font-medium text-emerald-600 dark:text-emerald-400">作成成功セッション:</span>
+                      <ul className="list-disc list-inside space-y-0.5 text-slate-600 dark:text-slate-400 pl-1">
+                        {julesResult.succeeded.map((s: any, idx: number) => (
+                          <li key={idx}>
+                            {s.title} ({s.repo})
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {julesResult.failed && julesResult.failed.length > 0 && (
+                    <div className="space-y-1 mt-2">
+                      <span className="font-medium text-red-600 dark:text-red-400">失敗詳細:</span>
+                      <ul className="list-disc list-inside space-y-0.5 text-red-600 dark:text-red-400 pl-1">
+                        {julesResult.failed.map((f: string, idx: number) => (
+                          <li key={idx}>{f}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsJulesModalOpen(false)}
+                  disabled={isExecutingJules}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors"
+                >
+                  閉じる
+                </button>
+                <button
+                  type="submit"
+                  disabled={isExecutingJules}
+                  className={cn(
+                    "px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm",
+                    julesDryRun
+                      ? "bg-slate-700 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600"
+                      : "bg-amber-600 hover:bg-amber-700"
+                  )}
+                >
+                  {isExecutingJules ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>実行中...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-4 h-4 fill-white" />
+                      <span>{julesDryRun ? "シミュレーション実行" : "Jules を実行"}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
