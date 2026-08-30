@@ -229,7 +229,7 @@ export default function Dashboard() {
               title="Jules Automation を画面から起動"
             >
               <Zap className="w-4 h-4 fill-white" />
-              <span>Jules Auto Run</span>
+              <span>Run Jules</span>
             </button>
           </div>
         </div>
