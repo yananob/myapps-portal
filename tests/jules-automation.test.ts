@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { listAllJulesSources, createJulesSession } from "@/lib/jules-client";
-import { getRepoLastExecutedTimes, updateRepoLastExecutedTime, getRootCollectionName } from "@/lib/firestore-client";
+import { getRepoLastExecutedTimes, updateRepoLastExecutedTime, getRootCollectionName, getHiddenRepos } from "@/lib/firestore-client";
 import { getRepoDefaultBranch } from "@/lib/github-client";
 import { POST } from "@/app/api/jules-automation/route";
 import { NextRequest } from "next/server";
@@ -20,6 +20,7 @@ vi.mock("@/lib/github-client", () => ({
 vi.mock("@/lib/firestore-client", () => ({
   getRepoLastExecutedTimes: vi.fn(),
   updateRepoLastExecutedTime: vi.fn(),
+  getHiddenRepos: vi.fn(),
   getRootCollectionName: () => {
     const appEnv = process.env.APP_ENV;
     if (appEnv === "test") {
@@ -57,6 +58,7 @@ describe("Jules Automation API エンドポイントのテスト", () => {
     // FirestoreおよびGitHubのデフォルトモック
     vi.mocked(getRepoLastExecutedTimes).mockResolvedValue({});
     vi.mocked(updateRepoLastExecutedTime).mockResolvedValue(undefined);
+    vi.mocked(getHiddenRepos).mockResolvedValue([]);
     vi.mocked(getRepoDefaultBranch).mockResolvedValue("test");
   });
 
@@ -303,6 +305,32 @@ describe("Jules Automation API エンドポイントのテスト", () => {
 
     // Firestoreの最終実行日時更新が 'app-one' に対して呼び出されたことを検証
     expect(updateRepoLastExecutedTime).toHaveBeenCalledWith("app-one");
+  });
+
+  it("非表示リポジトリ（hidden-repos）は Jules 自動化処理対象外となること", async () => {
+    const mockSources = [
+      {
+        name: "sources/github/test-owner/app-one",
+        id: "github/test-owner/app-one",
+        githubRepo: { owner: "test-owner", repo: "app-one" },
+      },
+      {
+        name: "sources/github/test-owner/app-two",
+        id: "github/test-owner/app-two",
+        githubRepo: { owner: "test-owner", repo: "app-two" },
+      },
+    ];
+
+    vi.mocked(listAllJulesSources).mockResolvedValue(mockSources);
+    // app-one を非表示に設定
+    vi.mocked(getHiddenRepos).mockResolvedValue(["app-one"]);
+
+    const request = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=true&limit=2");
+    const response = await POST(request);
+    const body = await response.json();
+
+    // app-one が除外され、app-two のみが選択されること
+    expect(body.selectedRepos).toEqual(["app-two"]);
   });
 
   it("Pub/Sub メッセージボディ内のパラメータを正しく処理できること", async () => {

@@ -59,7 +59,18 @@ export default function Dashboard() {
 
   const CACHE_KEY = "myapps-portal-cache";
   const CACHE_TIME_KEY = "myapps-portal-cache-time";
-  const HIDDEN_KEY = "myapps-portal-hidden";
+
+  const fetchHiddenRepos = async () => {
+    try {
+      const response = await fetch("/api/hidden-repos");
+      const data = await response.json();
+      if (response.ok && Array.isArray(data.hiddenRepos)) {
+        setHiddenIds(new Set(data.hiddenRepos));
+      }
+    } catch (e) {
+      console.error("Failed to fetch hidden repos:", e);
+    }
+  };
 
   const fetchServices = async (useCache = true) => {
     setLoading(true);
@@ -103,28 +114,61 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchServices(true);
-    // 非表示リストの読み込み
-    const savedHidden = localStorage.getItem(HIDDEN_KEY);
-    if (savedHidden) {
-      try {
-        setHiddenIds(new Set(JSON.parse(savedHidden)));
-      } catch (e) {
-        console.error("Failed to parse hidden IDs:", e);
-      }
-    }
+    fetchHiddenRepos();
   }, []);
 
-  const toggleHide = (baseName: string) => {
+  const toggleHide = async (baseName: string) => {
+    const isCurrentlyHidden = hiddenIds.has(baseName);
+    const newHiddenState = !isCurrentlyHidden;
+
+    // 楽観的UI更新
     setHiddenIds((prev) => {
       const next = new Set(prev);
-      if (next.has(baseName)) {
-        next.delete(baseName);
-      } else {
+      if (newHiddenState) {
         next.add(baseName);
+      } else {
+        next.delete(baseName);
       }
-      localStorage.setItem(HIDDEN_KEY, JSON.stringify(Array.from(next)));
       return next;
     });
+
+    try {
+      const response = await fetch("/api/hidden-repos", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          repo: baseName,
+          hidden: newHiddenState,
+        }),
+      });
+      if (!response.ok) {
+        console.error("Failed to update hidden status on server");
+        // エラーが発生した場合はロールバック
+        setHiddenIds((prev) => {
+          const next = new Set(prev);
+          if (isCurrentlyHidden) {
+            next.add(baseName);
+          } else {
+            next.delete(baseName);
+          }
+          return next;
+        });
+      }
+    } catch (e) {
+      console.error("Failed to toggle hidden repo status:", e);
+      // ロールバック
+      setHiddenIds((prev) => {
+        const next = new Set(prev);
+        if (isCurrentlyHidden) {
+          next.add(baseName);
+        } else {
+          next.delete(baseName);
+        }
+        return next;
+      });
+    }
   };
 
   const filteredGroups = useMemo(() => {

@@ -1,5 +1,5 @@
 import { listAllJulesSources, createJulesSession } from "./jules-client";
-import { getRepoLastExecutedTimes, updateRepoLastExecutedTime } from "./firestore-client";
+import { getRepoLastExecutedTimes, updateRepoLastExecutedTime, getHiddenRepos } from "./firestore-client";
 import { getRepoDefaultBranch } from "./github-client";
 
 /**
@@ -62,10 +62,17 @@ export async function executeJulesAutomation(
     };
   }
 
-  // テンプレートリポジトリ（_template）は自動リファクタリングの対象から除外
-  const targetSources = ownerSources.filter(
-    (source) => source.githubRepo?.repo.toLowerCase() !== "_template"
-  );
+  // Firestore から非表示リポジトリを取得し、除外対象を判定
+  const hiddenReposList = await getHiddenRepos();
+  const hiddenReposSet = new Set(hiddenReposList.map((r) => r.toLowerCase()));
+
+  // テンプレートリポジトリ（_template）および非表示リポジトリを自動リファクタリングの対象から除外
+  const targetSources = ownerSources.filter((source) => {
+    const repoName = source.githubRepo?.repo.toLowerCase() || "";
+    if (repoName === "_template") return false;
+    if (hiddenReposSet.has(repoName)) return false;
+    return true;
+  });
 
   if (targetSources.length === 0) {
     return {
