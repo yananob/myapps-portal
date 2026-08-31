@@ -84,3 +84,63 @@ export async function updateRepoLastExecutedTime(repo: string): Promise<void> {
     console.error(`Firestoreへの最終実行日時（${repo}）の保存に失敗しました:`, error);
   }
 }
+
+/**
+ * Firestoreから非表示設定されているリポジトリ一覧を取得します。
+ * Firestoreの接続エラーや認証エラーが発生した場合は、空の配列を返して処理を継続します。
+ *
+ * @returns 非表示設定されているリポジトリ名の配列
+ */
+export async function getHiddenRepos(): Promise<string[]> {
+  const result: string[] = [];
+  try {
+    const db = getFirestoreClient();
+    const rootCollection = getRootCollectionName();
+    const snapshot = await db
+      .collection(rootCollection)
+      .doc("settings")
+      .collection("hidden-repos")
+      .get();
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      if (data.hidden !== false) {
+        result.push(doc.id);
+      }
+    });
+  } catch (error) {
+    console.warn(`Firestoreからの非表示リポジトリ一覧取得に失敗しました。空のリストとして処理を続行します (${getRootCollectionName()}):`, error);
+  }
+  return result;
+}
+
+/**
+ * 指定されたリポジトリの非表示設定をFirestoreに保存します。
+ *
+ * @param repo リポジトリ名
+ * @param hidden 非表示にする場合は true、表示する場合は false
+ */
+export async function setRepoHidden(repo: string, hidden: boolean): Promise<void> {
+  try {
+    const db = getFirestoreClient();
+    const rootCollection = getRootCollectionName();
+    const docRef = db
+      .collection(rootCollection)
+      .doc("settings")
+      .collection("hidden-repos")
+      .doc(repo);
+
+    if (hidden) {
+      await docRef.set({
+        repoName: repo,
+        hidden: true,
+        updatedAt: new Date(),
+      }, { merge: true });
+      console.log(`Firestore (${rootCollection}) にリポジトリ ${repo} の非表示設定(hidden=true)を保存しました。`);
+    } else {
+      await docRef.delete();
+      console.log(`Firestore (${rootCollection}) からリポジトリ ${repo} の非表示設定を削除(hidden=false)しました。`);
+    }
+  } catch (error) {
+    console.error(`Firestoreへの非表示設定（${repo}: ${hidden}）の保存に失敗しました:`, error);
+  }
+}

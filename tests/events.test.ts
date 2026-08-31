@@ -14,6 +14,8 @@ vi.mock("@/lib/jules-client", () => ({
 vi.mock("@/lib/firestore-client", () => ({
   getRepoLastExecutedTimes: vi.fn(),
   updateRepoLastExecutedTime: vi.fn(),
+  getHiddenRepos: vi.fn().mockResolvedValue([]),
+  setRepoHidden: vi.fn(),
 }));
 
 import { getCloudRunServices, deleteCloudRunService } from "@/lib/gcp-client";
