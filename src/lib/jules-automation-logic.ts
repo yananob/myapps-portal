@@ -121,7 +121,7 @@ export async function executeJulesAutomation(
     sessionsToCreate.push({
       source: target.name,
       title: `[Jules] Daily Refactoring for ${repoName}`,
-      prompt: `Analyze this repository and perform general refactoring. This includes cleaning up unused code, simplifying complex functions, updating outdated patterns, optimizing performance, and ensuring a clean and consistent coding style throughout the codebase. Finally, prepare a Pull Request with your improvements.`,
+      prompt: `Analyze this repository and perform general refactoring and documentation updates. This includes cleaning up unused code, simplifying complex functions, updating outdated patterns, optimizing performance, ensuring a clean and consistent coding style throughout the codebase, and updating or creating documentation (such as README.md, inline comments, or docs) to reflect current codebase status. Finally, prepare a Pull Request with your improvements.`,
       taskType: "refactor",
       repo: repoName,
       startingBranch,

@@ -289,11 +289,12 @@ describe("Jules Automation API エンドポイントのテスト", () => {
     expect(body.succeeded).toHaveLength(1); // app-one に対する refactor 1件
     expect(body.failed).toHaveLength(0);
 
-    // Jules API セッション作成が呼び出され、sourceContext.githubRepoContext.startingBranch が指定されたことを検証
+    // Jules API セッション作成が呼び出され、sourceContext.githubRepoContext.startingBranch およびドキュメント更新のプロンプトが指定されたことを検証
     expect(createJulesSession).toHaveBeenCalledTimes(1);
     expect(createJulesSession).toHaveBeenCalledWith(
       "test-jules-key",
       expect.objectContaining({
+        prompt: expect.stringContaining("documentation updates"),
         sourceContext: {
           source: "sources/github/test-owner/app-one",
           githubRepoContext: {
