@@ -1,4 +1,9 @@
-import { listAllJulesSources, createJulesSession } from "./jules-client";
+import {
+  listAllJulesSources,
+  listAllJulesSessions,
+  getRemainingSessionCapacity,
+  createJulesSession,
+} from "./jules-client";
 import { getRepoLastExecutedTimes, updateRepoLastExecutedTime, getHiddenRepos } from "./firestore-client";
 import { getRepoDefaultBranch } from "./github-client";
 
@@ -23,6 +28,8 @@ export interface JulesAutomationResult {
   failed?: any[];
   sessions?: any[];
   selectedRepos?: string[];
+  skipped?: boolean;
+  remainingCapacity?: number;
   dryRun: boolean;
 }
 
@@ -43,6 +50,25 @@ export async function executeJulesAutomation(
   let limit = 1;
   if (options.limit !== undefined && options.limit !== null && !isNaN(options.limit)) {
     limit = Math.max(1, Math.min(3, options.limit));
+  }
+
+  // 過去24時間以内のJulesセッション数を取得し、残容量を確認
+  const allSessions = await listAllJulesSessions(julesApiKey);
+  const { countIn24Hours, remainingCapacity } = getRemainingSessionCapacity(allSessions);
+
+  console.log(`[JulesAutomation] 過去24時間のセッション作成数: ${countIn24Hours}件, 残り作成可能枠: ${remainingCapacity}件`);
+
+  // 残り作成可能枠が 10 未満の場合は余裕がないため処理をスキップ（ログのみ出力）
+  if (remainingCapacity < 10) {
+    const skipMessage = `Insufficient Jules session capacity in the last 24 hours (Remaining: ${remainingCapacity}, Required: 10 or more). Skipping automation execution.`;
+    console.log(`[JulesAutomation] ${skipMessage}`);
+    return {
+      message: skipMessage,
+      sessionsCreated: [],
+      skipped: true,
+      remainingCapacity,
+      dryRun,
+    };
   }
 
   // Jules Sources（リポジトリ一覧）の取得
