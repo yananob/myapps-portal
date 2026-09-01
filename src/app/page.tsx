@@ -18,7 +18,6 @@ export default function Dashboard() {
 
   // Jules 自動化ダイアログ用のステート
   const [isJulesModalOpen, setIsJulesModalOpen] = useState(false);
-  const [julesDryRun, setJulesDryRun] = useState(true);
   const [julesLimit, setJulesLimit] = useState(1);
   const [julesTask, setJulesTask] = useState("refactor");
   const [isExecutingJules, setIsExecutingJules] = useState(false);
@@ -37,7 +36,7 @@ export default function Dashboard() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          dryRun: julesDryRun,
+          dryRun: false,
           limit: julesLimit,
           task: julesTask,
         }),
@@ -356,20 +355,6 @@ export default function Dashboard() {
                 />
               </div>
 
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="dryRun"
-                  checked={julesDryRun}
-                  onChange={(e) => setJulesDryRun(e.target.checked)}
-                  disabled={isExecutingJules}
-                  className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500"
-                />
-                <label htmlFor="dryRun" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
-                  Dry-run モード（実際のセッション作成は行わずシミュレーション）
-                </label>
-              </div>
-
               {julesError && (
                 <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg text-xs text-red-700 dark:text-red-300">
                   {julesError}
@@ -436,12 +421,7 @@ export default function Dashboard() {
                 <button
                   type="submit"
                   disabled={isExecutingJules}
-                  className={cn(
-                    "px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm",
-                    julesDryRun
-                      ? "bg-slate-700 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600"
-                      : "bg-amber-600 hover:bg-amber-700"
-                  )}
+                  className="px-4 py-2 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors flex items-center gap-2 shadow-sm"
                 >
                   {isExecutingJules ? (
                     <>
@@ -451,7 +431,7 @@ export default function Dashboard() {
                   ) : (
                     <>
                       <Play className="w-4 h-4 fill-white" />
-                      <span>{julesDryRun ? "シミュレーション実行" : "Jules を実行"}</span>
+                      <span>Jules を実行</span>
                     </>
                   )}
                 </button>
