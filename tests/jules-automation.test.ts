@@ -1,15 +1,25 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { listAllJulesSources, createJulesSession } from "@/lib/jules-client";
+import {
+  listAllJulesSources,
+  listAllJulesSessions,
+  getRemainingSessionCapacity,
+  createJulesSession,
+} from "@/lib/jules-client";
 import { getRepoLastExecutedTimes, updateRepoLastExecutedTime, getRootCollectionName, getHiddenRepos } from "@/lib/firestore-client";
 import { getRepoDefaultBranch } from "@/lib/github-client";
 import { POST } from "@/app/api/jules-automation/route";
 import { NextRequest } from "next/server";
 
-// Jules APIクライアントの依存モジュールをモック
-vi.mock("@/lib/jules-client", () => ({
-  listAllJulesSources: vi.fn(),
-  createJulesSession: vi.fn(),
-}));
+// Jules APIクライアントの依存モジュールをモック（実体のgetRemainingSessionCapacityはそのまま使うようにactualをインポート）
+vi.mock("@/lib/jules-client", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/jules-client")>("@/lib/jules-client");
+  return {
+    ...actual,
+    listAllJulesSources: vi.fn(),
+    listAllJulesSessions: vi.fn(),
+    createJulesSession: vi.fn(),
+  };
+});
 
 // GitHubクライアントの依存モジュールをモック
 vi.mock("@/lib/github-client", () => ({
@@ -60,6 +70,8 @@ describe("Jules Automation API エンドポイントのテスト", () => {
     vi.mocked(updateRepoLastExecutedTime).mockResolvedValue(undefined);
     vi.mocked(getHiddenRepos).mockResolvedValue([]);
     vi.mocked(getRepoDefaultBranch).mockResolvedValue("test");
+    // デフォルトでは過去24時間以内のセッションは0件（残り15件作成可能）
+    vi.mocked(listAllJulesSessions).mockResolvedValue([]);
   });
 
   const createRequest = (
@@ -332,6 +344,64 @@ describe("Jules Automation API エンドポイントのテスト", () => {
 
     // app-one が除外され、app-two のみが選択されること
     expect(body.selectedRepos).toEqual(["app-two"]);
+  });
+
+  it("24時間以内の残り作成枠が10未満の場合にセッション作成がスキップされること", async () => {
+    const now = new Date();
+    // 過去24時間以内に作成されたセッションを 6 件作成（残り枠: 15 - 6 = 9件 < 10件）
+    const mockSessions = Array.from({ length: 6 }).map((_, i) => ({
+      name: `sessions/${i}`,
+      id: `${i}`,
+      title: `session ${i}`,
+      prompt: "prompt",
+      sourceContext: { source: "source" },
+      createTime: new Date(now.getTime() - i * 60 * 60 * 1000).toISOString(),
+    }));
+
+    vi.mocked(listAllJulesSessions).mockResolvedValue(mockSessions);
+
+    const request = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=false");
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body.skipped).toBe(true);
+    expect(body.remainingCapacity).toBe(9);
+    expect(body.message).toContain("Insufficient Jules session capacity");
+
+    // リポジトリソースの取得やセッション作成が呼び出されないこと
+    expect(listAllJulesSources).not.toHaveBeenCalled();
+    expect(createJulesSession).not.toHaveBeenCalled();
+  });
+
+  it("24時間以内の残り作成枠が10以上の場合に正常に実行されること", async () => {
+    const now = new Date();
+    // 過去24時間以内に作成されたセッションを 5 件作成（残り枠: 15 - 5 = 10件 >= 10件）
+    const mockSessions = Array.from({ length: 5 }).map((_, i) => ({
+      name: `sessions/${i}`,
+      id: `${i}`,
+      title: `session ${i}`,
+      prompt: "prompt",
+      sourceContext: { source: "source" },
+      createTime: new Date(now.getTime() - i * 60 * 60 * 1000).toISOString(),
+    }));
+
+    vi.mocked(listAllJulesSessions).mockResolvedValue(mockSessions);
+    vi.mocked(listAllJulesSources).mockResolvedValue([
+      {
+        name: "sources/github/test-owner/app-one",
+        id: "github/test-owner/app-one",
+        githubRepo: { owner: "test-owner", repo: "app-one" },
+      },
+    ]);
+
+    const request = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=true");
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body.skipped).toBeUndefined();
+    expect(body.selectedRepos).toEqual(["app-one"]);
   });
 
   it("Pub/Sub メッセージボディ内のパラメータを正しく処理できること", async () => {

@@ -6,10 +6,15 @@ vi.mock("@/lib/gcp-client", () => ({
   deleteCloudRunService: vi.fn(),
 }));
 
-vi.mock("@/lib/jules-client", () => ({
-  listAllJulesSources: vi.fn(),
-  createJulesSession: vi.fn(),
-}));
+vi.mock("@/lib/jules-client", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/jules-client")>("@/lib/jules-client");
+  return {
+    ...actual,
+    listAllJulesSources: vi.fn(),
+    listAllJulesSessions: vi.fn().mockResolvedValue([]),
+    createJulesSession: vi.fn(),
+  };
+});
 
 vi.mock("@/lib/firestore-client", () => ({
   getRepoLastExecutedTimes: vi.fn(),

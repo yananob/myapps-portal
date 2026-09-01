@@ -37,6 +37,8 @@ export interface JulesSession {
       startingBranch?: string;
     };
   };
+  createTime?: string; // ISO 8601 文字列 (例: "2026-09-01T10:00:00Z")
+  create_time?: string; // スネークケースで返却される場合のフォールバック
 }
 
 /**
@@ -93,6 +95,84 @@ export async function listAllJulesSources(apiKey: string): Promise<JulesSource[]
 
   console.log(`[JulesClient] Jules ソース一覧の取得に成功しました。合計: ${sources.length}件`);
   return sources;
+}
+
+/**
+ * Jules API に存在するすべてのセッションの一覧を取得します。
+ * ページネーションを自動的に処理して全件取得します。
+ *
+ * @param apiKey Jules API キー
+ * @returns 取得されたセッションの配列
+ */
+export async function listAllJulesSessions(apiKey: string): Promise<JulesSession[]> {
+  let sessions: JulesSession[] = [];
+  let pageToken = "";
+
+  console.log(`[JulesClient] Jules セッション一覧の取得を開始します... (ApiKey: ${maskApiKey(apiKey)})`);
+
+  do {
+    const url = new URL("https://jules.googleapis.com/v1alpha/sessions");
+    if (pageToken) {
+      url.searchParams.set("pageToken", pageToken);
+    }
+
+    console.log(`[JulesClient] GET Request -> ${url.toString()}`);
+
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        "X-Goog-Api-Key": apiKey,
+      },
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`[JulesClient] Jules API セッション一覧の取得に失敗しました: Status=${res.status} ${res.statusText}, URL=${url.toString()}, Response=${errText}`);
+      throw new Error(`Jules API セッション一覧の取得に失敗しました: ${res.status} ${res.statusText} - ${errText}`);
+    }
+
+    const data = await res.json();
+    console.log(`[JulesClient] GET Response <- ${res.status} ${res.statusText}, SessionsCount=${data.sessions?.length || 0}, NextPageToken=${data.nextPageToken || "none"}`);
+
+    if (data.sessions) {
+      sessions = sessions.concat(data.sessions);
+    }
+    pageToken = data.nextPageToken || "";
+  } while (pageToken);
+
+  console.log(`[JulesClient] Jules セッション一覧の取得に成功しました。合計: ${sessions.length}件`);
+  return sessions;
+}
+
+/**
+ * 過去24時間以内に作成されたセッション数を計算し、残りの作成可能セッション数を算出します。
+ * Jules は 24時間以内に最大 15 セッションまで作成可能です（ローリング方式）。
+ *
+ * @param sessions Jules セッションの配列
+ * @param maxSessions 24時間以内の最大作成枠 (デフォルト: 15)
+ * @param now 現在時刻 (テスト用に差し替え可能、デフォルト: 現在日時)
+ * @returns { countIn24Hours: number, remainingCapacity: number } 24時間以内の作成件数と残り作成可能枠
+ */
+export function getRemainingSessionCapacity(
+  sessions: JulesSession[],
+  maxSessions = 15,
+  now = new Date()
+): { countIn24Hours: number; remainingCapacity: number } {
+  const twentyFourHoursAgo = now.getTime() - 24 * 60 * 60 * 1000;
+
+  const countIn24Hours = sessions.filter((session) => {
+    const timeStr = session.createTime || session.create_time;
+    if (!timeStr) return false;
+    const createTimeMs = new Date(timeStr).getTime();
+    return !isNaN(createTimeMs) && createTimeMs >= twentyFourHoursAgo;
+  }).length;
+
+  const remainingCapacity = Math.max(0, maxSessions - countIn24Hours);
+
+  return {
+    countIn24Hours,
+    remainingCapacity,
+  };
 }
 
 /**
