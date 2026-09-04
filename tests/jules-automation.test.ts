@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { listAllJulesSources, createJulesSession } from "@/lib/jules-client";
-import { getRepoLastExecutedTimes, updateRepoLastExecutedTime, getRootCollectionName, getHiddenRepos } from "@/lib/firestore-client";
+import {
+  getRepoLastExecutedTimes,
+  updateRepoLastExecutedTime,
+  getRootCollectionName,
+  getHiddenRepos,
+  getLastBatchExecutedTime,
+  updateLastBatchExecutedTime,
+} from "@/lib/firestore-client";
 import { getRepoDefaultBranch } from "@/lib/github-client";
 import { POST } from "@/app/api/jules-automation/route";
 import { NextRequest } from "next/server";
@@ -21,6 +28,8 @@ vi.mock("@/lib/firestore-client", () => ({
   getRepoLastExecutedTimes: vi.fn(),
   updateRepoLastExecutedTime: vi.fn(),
   getHiddenRepos: vi.fn(),
+  getLastBatchExecutedTime: vi.fn(),
+  updateLastBatchExecutedTime: vi.fn(),
   getRootCollectionName: () => {
     const appEnv = process.env.APP_ENV;
     if (appEnv === "test") {
@@ -59,6 +68,8 @@ describe("Jules Automation API エンドポイントのテスト", () => {
     vi.mocked(getRepoLastExecutedTimes).mockResolvedValue({});
     vi.mocked(updateRepoLastExecutedTime).mockResolvedValue(undefined);
     vi.mocked(getHiddenRepos).mockResolvedValue([]);
+    vi.mocked(getLastBatchExecutedTime).mockResolvedValue(null);
+    vi.mocked(updateLastBatchExecutedTime).mockResolvedValue(undefined);
     vi.mocked(getRepoDefaultBranch).mockResolvedValue("test");
   });
 
@@ -381,5 +392,85 @@ describe("Jules Automation API エンドポイントのテスト", () => {
     expect(body.succeeded[0].taskType).toBe("refactor");
     expect(createJulesSession).toHaveBeenCalledTimes(1);
     expect(updateRepoLastExecutedTime).toHaveBeenCalledWith("app-one");
+  });
+
+  it("直近10分以内にバッチ実行があった場合、dryRun=false では処理がスキップ(skipped=true)されること", async () => {
+    const mockSources = [
+      {
+        name: "sources/github/test-owner/app-one",
+        id: "github/test-owner/app-one",
+        githubRepo: { owner: "test-owner", repo: "app-one" },
+      },
+    ];
+    vi.mocked(listAllJulesSources).mockResolvedValue(mockSources);
+
+    // 直近2分前に実行された履歴を設定
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+    vi.mocked(getLastBatchExecutedTime).mockResolvedValue(twoMinutesAgo);
+
+    const request = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=false");
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body.skipped).toBe(true);
+    expect(body.dryRun).toBe(false);
+    expect(createJulesSession).not.toHaveBeenCalled();
+    expect(updateLastBatchExecutedTime).not.toHaveBeenCalled();
+  });
+
+  it("ignoreCooldown=true の場合は直近10分以内に実行があってもスキップされずに処理が実行されること", async () => {
+    const mockSources = [
+      {
+        name: "sources/github/test-owner/app-one",
+        id: "github/test-owner/app-one",
+        githubRepo: { owner: "test-owner", repo: "app-one" },
+      },
+    ];
+    vi.mocked(listAllJulesSources).mockResolvedValue(mockSources);
+    vi.mocked(createJulesSession).mockResolvedValue({
+      name: "sessions/mock-session",
+      id: "mock-id",
+      title: "mock",
+      prompt: "mock",
+      sourceContext: { source: "sources/github/test-owner/app-one" },
+    });
+
+    // 直近2分前に実行された履歴を設定
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+    vi.mocked(getLastBatchExecutedTime).mockResolvedValue(twoMinutesAgo);
+
+    const request = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=false&ignoreCooldown=true");
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body.skipped).toBeUndefined();
+    expect(body.succeeded).toHaveLength(1);
+    expect(createJulesSession).toHaveBeenCalledTimes(1);
+    expect(updateLastBatchExecutedTime).toHaveBeenCalledTimes(1);
+  });
+
+  it("dryRun=true の場合は直近10分以内に実行があってもクールダウンチェックをスルーしてシミュレーションが返されること", async () => {
+    const mockSources = [
+      {
+        name: "sources/github/test-owner/app-one",
+        id: "github/test-owner/app-one",
+        githubRepo: { owner: "test-owner", repo: "app-one" },
+      },
+    ];
+    vi.mocked(listAllJulesSources).mockResolvedValue(mockSources);
+
+    // 直近1分前に実行された履歴を設定
+    const oneMinuteAgo = new Date(Date.now() - 1 * 60 * 1000);
+    vi.mocked(getLastBatchExecutedTime).mockResolvedValue(oneMinuteAgo);
+
+    const request = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=true");
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body.dryRun).toBe(true);
+    expect(body.selectedRepos).toEqual(["app-one"]);
   });
 });

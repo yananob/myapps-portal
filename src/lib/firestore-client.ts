@@ -86,6 +86,59 @@ export async function updateRepoLastExecutedTime(repo: string): Promise<void> {
 }
 
 /**
+ * Jules 自動化処理全体の最終バッチ実行日時を取得します。
+ *
+ * @returns 最終バッチ実行日時の Date オブジェクト（存在しない場合は null）
+ */
+export async function getLastBatchExecutedTime(): Promise<Date | null> {
+  try {
+    const db = getFirestoreClient();
+    const rootCollection = getRootCollectionName();
+    const doc = await db
+      .collection(rootCollection)
+      .doc("jules-history")
+      .collection("meta")
+      .doc("batch")
+      .get();
+
+    if (!doc.exists) {
+      return null;
+    }
+
+    const data = doc.data();
+    if (!data?.lastBatchExecutedAt) {
+      return null;
+    }
+
+    return data.lastBatchExecutedAt.toDate?.() || new Date(data.lastBatchExecutedAt);
+  } catch (error) {
+    console.warn(`Firestoreからの最終バッチ実行日時取得に失敗しました:`, error);
+    return null;
+  }
+}
+
+/**
+ * Jules 自動化処理全体の最終バッチ実行日時を現在時刻に更新します。
+ */
+export async function updateLastBatchExecutedTime(): Promise<void> {
+  try {
+    const db = getFirestoreClient();
+    const rootCollection = getRootCollectionName();
+    await db
+      .collection(rootCollection)
+      .doc("jules-history")
+      .collection("meta")
+      .doc("batch")
+      .set({
+        lastBatchExecutedAt: new Date(),
+      }, { merge: true });
+    console.log(`Firestore (${rootCollection}) に最終バッチ実行日時を保存しました。`);
+  } catch (error) {
+    console.error(`Firestoreへの最終バッチ実行日時の保存に失敗しました:`, error);
+  }
+}
+
+/**
  * Firestoreから非表示設定されているリポジトリ一覧を取得します。
  * Firestoreの接続エラーや認証エラーが発生した場合は、空の配列を返して処理を継続します。
  *
