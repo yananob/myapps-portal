@@ -39,6 +39,7 @@ export default function Dashboard() {
           dryRun: false,
           limit: julesLimit,
           task: julesTask,
+          ignoreCooldown: true,
         }),
       });
 

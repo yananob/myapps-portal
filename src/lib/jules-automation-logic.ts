@@ -1,5 +1,11 @@
 import { listAllJulesSources, createJulesSession } from "./jules-client";
-import { getRepoLastExecutedTimes, updateRepoLastExecutedTime, getHiddenRepos } from "./firestore-client";
+import {
+  getRepoLastExecutedTimes,
+  updateRepoLastExecutedTime,
+  getHiddenRepos,
+  getLastBatchExecutedTime,
+  updateLastBatchExecutedTime,
+} from "./firestore-client";
 import { getRepoDefaultBranch } from "./github-client";
 
 /**
@@ -9,6 +15,7 @@ export interface JulesAutomationOptions {
   dryRun?: boolean;
   task?: string;
   limit?: number;
+  ignoreCooldown?: boolean;
   julesApiKey: string;
   githubOwner: string;
 }
@@ -24,6 +31,7 @@ export interface JulesAutomationResult {
   sessions?: any[];
   selectedRepos?: string[];
   dryRun: boolean;
+  skipped?: boolean;
 }
 
 /**
@@ -142,6 +150,25 @@ export async function executeJulesAutomation(
       dryRun: true,
     };
   }
+
+  // クールダウン（二重起動防止）チェック
+  if (!options.ignoreCooldown) {
+    const lastBatchTime = await getLastBatchExecutedTime();
+    const cooldownMs = 10 * 60 * 1000; // 10分
+    if (lastBatchTime && Date.now() - lastBatchTime.getTime() < cooldownMs) {
+      console.log(`[Jules Automation] 直近10分以内にバッチ処理が実行されているため、二重起動を防止し処理をスキップします。 (前回実行: ${lastBatchTime.toISOString()})`);
+      return {
+        message: "Jules automation skipped: executed recently within cooldown window (10 minutes).",
+        succeeded: [],
+        failed: [],
+        dryRun: false,
+        skipped: true,
+      };
+    }
+  }
+
+  // 実行開始時に最終バッチ実行日時を更新
+  await updateLastBatchExecutedTime();
 
   console.log(`Jules API を使用して、${sessionsToCreate.length}件のセッションの作成を開始します。`);
   const results = await Promise.allSettled(

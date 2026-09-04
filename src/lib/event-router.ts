@@ -7,16 +7,18 @@ export interface ParsedEventPayload {
   dryRun: boolean;
   task: string;
   limit?: number;
+  ignoreCooldown?: boolean;
 }
 
 /**
- * リクエストからイベント用パラメータ（command, dryRun, task, limit）を抽出・解析します。
+ * リクエストからイベント用パラメータ（command, dryRun, task, limit, ignoreCooldown）を抽出・解析します。
  */
 export async function parseEventParams(request: NextRequest): Promise<ParsedEventPayload> {
   let bodyCommand: string | null = null;
   let bodyDryRun: boolean | null = null;
   let bodyTask: string | null = null;
   let bodyLimit: number | null = null;
+  let bodyIgnoreCooldown: boolean | null = null;
 
   try {
     const text = await request.clone().text();
@@ -34,6 +36,9 @@ export async function parseEventParams(request: NextRequest): Promise<ParsedEven
         }
         if (typeof body.limit !== "undefined") {
           bodyLimit = Number(body.limit);
+        }
+        if (typeof body.ignoreCooldown !== "undefined") {
+          bodyIgnoreCooldown = body.ignoreCooldown === true || body.ignoreCooldown === "true";
         }
 
         // Pub/Subメッセージの場合は data 部をデコードして確認
@@ -54,6 +59,9 @@ export async function parseEventParams(request: NextRequest): Promise<ParsedEven
               if (typeof parsedData.limit !== "undefined") {
                 bodyLimit = Number(parsedData.limit);
               }
+              if (typeof parsedData.ignoreCooldown !== "undefined") {
+                bodyIgnoreCooldown = parsedData.ignoreCooldown === true || parsedData.ignoreCooldown === "true";
+              }
             }
           } catch (e) {
             // デコード/パースエラーは無視
@@ -72,6 +80,7 @@ export async function parseEventParams(request: NextRequest): Promise<ParsedEven
   const dryRunQuery = searchParams.get("dryRun");
   const taskQuery = searchParams.get("task");
   const limitQuery = searchParams.get("limit");
+  const ignoreCooldownQuery = searchParams.get("ignoreCooldown");
 
   // commandの優先順位: クエリパラメータ > リクエストボディ / Pub/Subデータ > デフォルト("cleanup")
   const command = commandQuery || bodyCommand || "cleanup";
@@ -92,7 +101,14 @@ export async function parseEventParams(request: NextRequest): Promise<ParsedEven
     limit = rawLimit;
   }
 
-  return { command, dryRun, task, limit };
+  let ignoreCooldown: boolean | undefined = undefined;
+  if (ignoreCooldownQuery !== null) {
+    ignoreCooldown = ignoreCooldownQuery === "true";
+  } else if (bodyIgnoreCooldown !== null) {
+    ignoreCooldown = bodyIgnoreCooldown;
+  }
+
+  return { command, dryRun, task, limit, ignoreCooldown };
 }
 
 /**
@@ -160,7 +176,7 @@ export async function handleEventRequest(request: NextRequest): Promise<NextResp
     }
 
     // 2. パラメータ解析
-    const { command, dryRun, task, limit } = await parseEventParams(request);
+    const { command, dryRun, task, limit, ignoreCooldown } = await parseEventParams(request);
 
     // 3. ルーティングおよび処理のディスパッチ
     if (command === "jules-automation") {
@@ -179,6 +195,7 @@ export async function handleEventRequest(request: NextRequest): Promise<NextResp
         dryRun,
         task,
         limit,
+        ignoreCooldown,
         julesApiKey,
         githubOwner,
       });
