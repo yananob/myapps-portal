@@ -27,6 +27,11 @@ vi.mock("@/lib/firestore-client", () => ({
   setRepoHidden: vi.fn(),
   getLastBatchExecutedTime: vi.fn().mockResolvedValue(null),
   updateLastBatchExecutedTime: vi.fn().mockResolvedValue(undefined),
+  getJulesConfig: vi.fn().mockResolvedValue({
+    schedule: { sun: true, mon: true, tue: true, wed: true, thu: true, fri: true, sat: true },
+    excludedRepos: [],
+  }),
+  setJulesConfig: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { getCloudRunServices, deleteCloudRunService } from "@/lib/gcp-client";

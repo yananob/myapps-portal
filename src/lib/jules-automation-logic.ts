@@ -5,6 +5,8 @@ import {
   getHiddenRepos,
   getLastBatchExecutedTime,
   updateLastBatchExecutedTime,
+  getJulesConfig,
+  JulesSchedule,
 } from "./firestore-client";
 import { getRepoDefaultBranch, getAllReposInfo } from "./github-client";
 
@@ -16,6 +18,7 @@ export interface JulesAutomationOptions {
   task?: string;
   limit?: number;
   ignoreCooldown?: boolean;
+  ignoreSchedule?: boolean;
   julesApiKey: string;
   githubOwner: string;
 }
@@ -76,15 +79,39 @@ export async function executeJulesAutomation(
     Array.from(activeReposMap.keys()).map((r) => r.toLowerCase())
   );
 
+  // Jules 設定（曜日別起動設定・対象外リポジトリ）を取得
+  const julesConfig = await getJulesConfig();
+
+  // 曜日別起動スケジュールの判定（JST 基準）
+  if (!options.ignoreSchedule) {
+    const jstDay = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Tokyo",
+      weekday: "short",
+    }).format(new Date()).toLowerCase() as keyof JulesSchedule;
+
+    if (julesConfig.schedule && julesConfig.schedule[jstDay] === false) {
+      console.log(`[Jules Automation] 本日 (${jstDay}) はスケジュール設定により自動起動が無効化されているため、処理をスキップします。`);
+      return {
+        message: `Jules automation skipped: execution is disabled for today (${jstDay}) in schedule configuration.`,
+        succeeded: [],
+        failed: [],
+        dryRun,
+        skipped: true,
+      };
+    }
+  }
+
   // Firestore から非表示リポジトリを取得し、除外対象を判定
   const hiddenReposList = await getHiddenRepos();
   const hiddenReposSet = new Set(hiddenReposList.map((r) => r.toLowerCase()));
+  const excludedReposSet = new Set((julesConfig.excludedRepos || []).map((r) => r.toLowerCase()));
 
-  // テンプレートリポジトリ（_template）、非表示リポジトリ、アーカイブ済み/非アクティブなリポジトリを自動リファクタリングの対象から除外
+  // テンプレートリポジトリ（_template）、非表示リポジトリ、設定上の対象外リポジトリ、アーカイブ済み/非アクティブなリポジトリを自動リファクタリングの対象から除外
   const targetSources = ownerSources.filter((source) => {
     const repoName = source.githubRepo?.repo.toLowerCase() || "";
     if (repoName === "_template") return false;
     if (hiddenReposSet.has(repoName)) return false;
+    if (excludedReposSet.has(repoName)) return false;
     if (!activeReposSet.has(repoName)) return false;
     return true;
   });

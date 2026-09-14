@@ -167,6 +167,105 @@ export async function getHiddenRepos(): Promise<string[]> {
 }
 
 /**
+ * Jules 自動化の曜日別起動スケジュール設定
+ */
+export interface JulesSchedule {
+  sun: boolean;
+  mon: boolean;
+  tue: boolean;
+  wed: boolean;
+  thu: boolean;
+  fri: boolean;
+  sat: boolean;
+}
+
+/**
+ * Jules 自動化の設定モデル
+ */
+export interface JulesConfig {
+  schedule: JulesSchedule;
+  excludedRepos: string[];
+}
+
+/**
+ * Jules 自動化のデフォルト設定
+ */
+export const DEFAULT_JULES_CONFIG: JulesConfig = {
+  schedule: {
+    sun: true,
+    mon: true,
+    tue: true,
+    wed: true,
+    thu: true,
+    fri: true,
+    sat: true,
+  },
+  excludedRepos: [],
+};
+
+/**
+ * Jules 自動化設定（曜日別起動設定および対象外リポジトリ一覧）を取得します。
+ * Firestoreの接続エラー等が発生した場合は、デフォルト設定を返して処理を継続します。
+ */
+export async function getJulesConfig(): Promise<JulesConfig> {
+  try {
+    const db = getFirestoreClient();
+    const rootCollection = getRootCollectionName();
+    const doc = await db
+      .collection(rootCollection)
+      .doc("settings")
+      .collection("jules")
+      .doc("config")
+      .get();
+
+    if (!doc.exists) {
+      return DEFAULT_JULES_CONFIG;
+    }
+
+    const data = doc.data();
+    return {
+      schedule: {
+        sun: data?.schedule?.sun ?? DEFAULT_JULES_CONFIG.schedule.sun,
+        mon: data?.schedule?.mon ?? DEFAULT_JULES_CONFIG.schedule.mon,
+        tue: data?.schedule?.tue ?? DEFAULT_JULES_CONFIG.schedule.tue,
+        wed: data?.schedule?.wed ?? DEFAULT_JULES_CONFIG.schedule.wed,
+        thu: data?.schedule?.thu ?? DEFAULT_JULES_CONFIG.schedule.thu,
+        fri: data?.schedule?.fri ?? DEFAULT_JULES_CONFIG.schedule.fri,
+        sat: data?.schedule?.sat ?? DEFAULT_JULES_CONFIG.schedule.sat,
+      },
+      excludedRepos: Array.isArray(data?.excludedRepos) ? data.excludedRepos : DEFAULT_JULES_CONFIG.excludedRepos,
+    };
+  } catch (error) {
+    console.warn(`FirestoreからのJules設定取得に失敗しました。デフォルト設定を使用します:`, error);
+    return DEFAULT_JULES_CONFIG;
+  }
+}
+
+/**
+ * Jules 自動化設定（曜日別起動設定および対象外リポジトリ一覧）を更新します。
+ */
+export async function setJulesConfig(config: JulesConfig): Promise<void> {
+  try {
+    const db = getFirestoreClient();
+    const rootCollection = getRootCollectionName();
+    await db
+      .collection(rootCollection)
+      .doc("settings")
+      .collection("jules")
+      .doc("config")
+      .set({
+        schedule: config.schedule,
+        excludedRepos: config.excludedRepos,
+        updatedAt: new Date(),
+      }, { merge: true });
+    console.log(`Firestore (${rootCollection}) にJules設定を保存しました。`);
+  } catch (error) {
+    console.error(`FirestoreへのJules設定の保存に失敗しました:`, error);
+    throw error;
+  }
+}
+
+/**
  * 指定されたリポジトリの非表示設定をFirestoreに保存します。
  *
  * @param repo リポジトリ名
