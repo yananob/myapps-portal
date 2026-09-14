@@ -591,39 +591,47 @@ export default function Dashboard() {
                         Jules 処理対象外リポジトリ
                       </h3>
                       <p className="text-xs text-slate-500 mb-3">
-                        チェックを入れたリポジトリは Jules による自動リファクタリングの対象から除外されます。
+                        メイン画面に表示されているリポジトリの中から、Jules の自動リファクタリング対象から除外するリポジトリを選択してください。（※非表示にしたリポジトリやアーカイブのリポジトリは自動的に対象外となります）
                       </p>
                       <div className="max-h-48 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-lg p-2 space-y-1 bg-slate-50 dark:bg-slate-800/50">
-                        {serviceGroups.map((group) => {
-                          const isExcluded = excludedRepos.has(group.baseName);
-                          return (
-                            <label
-                              key={group.baseName}
-                              className="flex items-center gap-2.5 px-2 py-1.5 hover:bg-slate-200/50 dark:hover:bg-slate-800 rounded text-xs text-slate-800 dark:text-slate-200 cursor-pointer select-none"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isExcluded}
-                                onChange={(e) => {
-                                  const checked = e.target.checked;
-                                  setExcludedRepos((prev) => {
-                                    const next = new Set(prev);
-                                    if (checked) {
-                                      next.add(group.baseName);
-                                    } else {
-                                      next.delete(group.baseName);
-                                    }
-                                    return next;
-                                  });
-                                }}
-                                className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 dark:border-slate-700"
-                              />
-                              <span className={cn(isExcluded && "line-through text-slate-400")}>
-                                {group.baseName}
-                              </span>
-                            </label>
-                          );
-                        })}
+                        {serviceGroups.filter((group) => !hiddenIds.has(group.baseName)).length === 0 ? (
+                          <p className="text-xs text-slate-400 py-2 text-center">
+                            対象となるリポジトリがありません
+                          </p>
+                        ) : (
+                          serviceGroups
+                            .filter((group) => !hiddenIds.has(group.baseName))
+                            .map((group) => {
+                              const isExcluded = excludedRepos.has(group.baseName);
+                              return (
+                                <label
+                                  key={group.baseName}
+                                  className="flex items-center gap-2.5 px-2 py-1.5 hover:bg-slate-200/50 dark:hover:bg-slate-800 rounded text-xs text-slate-800 dark:text-slate-200 cursor-pointer select-none"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isExcluded}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      setExcludedRepos((prev) => {
+                                        const next = new Set(prev);
+                                        if (checked) {
+                                          next.add(group.baseName);
+                                        } else {
+                                          next.delete(group.baseName);
+                                        }
+                                        return next;
+                                      });
+                                    }}
+                                    className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 dark:border-slate-700"
+                                  />
+                                  <span className={cn(isExcluded && "line-through text-slate-400")}>
+                                    {group.baseName}
+                                  </span>
+                                </label>
+                              );
+                            })
+                        )}
                       </div>
                     </div>
 
