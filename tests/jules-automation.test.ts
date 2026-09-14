@@ -12,7 +12,11 @@ import {
   getHiddenRepos,
   getLastBatchExecutedTime,
   updateLastBatchExecutedTime,
+  getJulesConfig,
+  setJulesConfig,
+  DEFAULT_JULES_CONFIG,
 } from "@/lib/firestore-client";
+import { GET as GET_CONFIG, POST as POST_CONFIG } from "@/app/api/jules-config/route";
 import { getRepoDefaultBranch, getAllReposInfo } from "@/lib/github-client";
 import { POST } from "@/app/api/jules-automation/route";
 import { NextRequest } from "next/server";
@@ -38,6 +42,14 @@ vi.mock("@/lib/firestore-client", () => ({
   getHiddenRepos: vi.fn(),
   getLastBatchExecutedTime: vi.fn(),
   updateLastBatchExecutedTime: vi.fn(),
+  getJulesConfig: vi.fn(),
+  setJulesConfig: vi.fn(),
+  DEFAULT_JULES_CONFIG: {
+    schedule: {
+      sun: true, mon: true, tue: true, wed: true, thu: true, fri: true, sat: true,
+    },
+    excludedRepos: [],
+  },
   getRootCollectionName: () => {
     const appEnv = process.env.APP_ENV;
     if (appEnv === "test") {
@@ -210,6 +222,8 @@ describe("Jules Automation API エンドポイントのテスト", () => {
     vi.mocked(getHiddenRepos).mockResolvedValue([]);
     vi.mocked(getLastBatchExecutedTime).mockResolvedValue(null);
     vi.mocked(updateLastBatchExecutedTime).mockResolvedValue(undefined);
+    vi.mocked(getJulesConfig).mockResolvedValue(DEFAULT_JULES_CONFIG);
+    vi.mocked(setJulesConfig).mockResolvedValue(undefined);
     vi.mocked(getRepoDefaultBranch).mockResolvedValue("test");
 
     const defaultReposMap = new Map([
@@ -700,5 +714,103 @@ describe("Jules Automation API エンドポイントのテスト", () => {
     expect(body.skipped).toBeUndefined();
     expect(body.succeeded).toHaveLength(1);
     expect(createJulesSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("Jules 設定で除外されたリポジトリ (excludedRepos) が自動処理から除外されること", async () => {
+    const mockSources = [
+      {
+        name: "sources/github/test-owner/app-one",
+        id: "github/test-owner/app-one",
+        githubRepo: { owner: "test-owner", repo: "app-one" },
+      },
+      {
+        name: "sources/github/test-owner/app-two",
+        id: "github/test-owner/app-two",
+        githubRepo: { owner: "test-owner", repo: "app-two" },
+      },
+    ];
+    vi.mocked(listAllJulesSources).mockResolvedValue(mockSources);
+    vi.mocked(getJulesConfig).mockResolvedValue({
+      schedule: DEFAULT_JULES_CONFIG.schedule,
+      excludedRepos: ["app-one"],
+    });
+
+    const request = createRequest("Bearer test-cron-secret", "http://localhost/api/jules-automation?dryRun=true&limit=2");
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(body.selectedRepos).toEqual(["app-two"]);
+  });
+
+  it("当日の曜日スケジュールが false の場合、ignoreSchedule なしの自動実行がスキップ(skipped=true)されること", async () => {
+    const mockSources = [
+      {
+        name: "sources/github/test-owner/app-one",
+        id: "github/test-owner/app-one",
+        githubRepo: { owner: "test-owner", repo: "app-one" },
+      },
+    ];
+    vi.mocked(listAllJulesSources).mockResolvedValue(mockSources);
+
+    // 全曜日起動 OFF の設定を返す
+    vi.mocked(getJulesConfig).mockResolvedValue({
+      schedule: { sun: false, mon: false, tue: false, wed: false, thu: false, fri: false, sat: false },
+      excludedRepos: [],
+    });
+
+    const { executeJulesAutomation } = await vi.importActual<typeof import("@/lib/jules-automation-logic")>("@/lib/jules-automation-logic");
+
+    const result = await executeJulesAutomation({
+      dryRun: false,
+      julesApiKey: "test-key",
+      githubOwner: "test-owner",
+      ignoreSchedule: false,
+    });
+
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain("disabled for today");
+  });
+});
+
+describe("Jules Config API エンドポイントのテスト", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getJulesConfig).mockResolvedValue(DEFAULT_JULES_CONFIG);
+    vi.mocked(setJulesConfig).mockResolvedValue(undefined);
+  });
+
+  it("GET /api/jules-config が Jules 設定を返却すること", async () => {
+    const response = await GET_CONFIG();
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toEqual(DEFAULT_JULES_CONFIG);
+  });
+
+  it("POST /api/jules-config が有効な設定を更新・保存すること", async () => {
+    const updatedConfig = {
+      schedule: { sun: false, mon: true, tue: true, wed: true, thu: true, fri: true, sat: false },
+      excludedRepos: ["app-excluded"],
+    };
+
+    const request = {
+      json: async () => updatedConfig,
+    } as unknown as Request;
+
+    const response = await POST_CONFIG(request);
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body.success).toBe(true);
+    expect(body.config).toEqual(updatedConfig);
+    expect(setJulesConfig).toHaveBeenCalledWith(updatedConfig);
+  });
+
+  it("POST /api/jules-config で無効なデータの場合に 400 エラーを返却すること", async () => {
+    const request = {
+      json: async () => ({ schedule: null, excludedRepos: [] }),
+    } as unknown as Request;
+
+    const response = await POST_CONFIG(request);
+    expect(response.status).toBe(400);
   });
 });
