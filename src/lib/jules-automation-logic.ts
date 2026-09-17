@@ -1,4 +1,4 @@
-import { listAllJulesSources, createJulesSession, getRemainingSessionCapacity } from "./jules-client";
+import { listAllJulesSources, createJulesSession, getRemainingSessionCapacity, JulesSource } from "./jules-client";
 import {
   getRepoLastExecutedTimes,
   updateRepoLastExecutedTime,
@@ -8,7 +8,7 @@ import {
   getJulesConfig,
   JulesSchedule,
 } from "./firestore-client";
-import { getRepoDefaultBranch, getAllReposInfo } from "./github-client";
+import { getRepoDefaultBranch, getAllReposInfo, GitHubRepoInfo } from "./github-client";
 
 /**
  * Jules 自動化処理のオプション
@@ -24,7 +24,7 @@ export interface JulesAutomationOptions {
 }
 
 /**
- * Jules 自動化処理の結果
+ * Jules 自動化処理の実行結果
  */
 export interface JulesAutomationResult {
   message: string;
@@ -38,6 +38,103 @@ export interface JulesAutomationResult {
 }
 
 /**
+ * 作成予定の Jules セッションリクエスト情報
+ */
+export interface SessionRequestPlan {
+  source: string;
+  title: string;
+  prompt: string;
+  taskType: "refactor";
+  repo: string;
+  startingBranch: string;
+}
+
+/**
+ * 本日の曜日（JST基準）において自動起動が無効化されているかを判定します。
+ */
+export function isScheduleDisabledForToday(schedule?: JulesSchedule): { disabled: boolean; currentDay: string } {
+  const currentDay = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Tokyo",
+    weekday: "short",
+  }).format(new Date()).toLowerCase() as keyof JulesSchedule;
+
+  const disabled = Boolean(schedule && schedule[currentDay] === false);
+  return { disabled, currentDay };
+}
+
+/**
+ * Jules ソース一覧から自動化処理の対象となるリポジトリをフィルタリングします。
+ */
+export function filterTargetSources(
+  sources: JulesSource[],
+  activeReposMap: Map<string, GitHubRepoInfo>,
+  hiddenReposList: string[],
+  excludedReposList: string[]
+): JulesSource[] {
+  const activeReposSet = new Set(Array.from(activeReposMap.keys()).map((r) => r.toLowerCase()));
+  const hiddenReposSet = new Set(hiddenReposList.map((r) => r.toLowerCase()));
+  const excludedReposSet = new Set(excludedReposList.map((r) => r.toLowerCase()));
+
+  return sources.filter((source) => {
+    const repoName = source.githubRepo?.repo.toLowerCase() || "";
+    if (!repoName || repoName === "_template") return false;
+    if (hiddenReposSet.has(repoName)) return false;
+    if (excludedReposSet.has(repoName)) return false;
+    if (!activeReposSet.has(repoName)) return false;
+    return true;
+  });
+}
+
+/**
+ * 対象ソースを最終実行日時の古い順（未実行が最優先）でソートします。
+ */
+export function sortSourcesByExecutionHistory(
+  sources: JulesSource[],
+  lastExecutedTimes: Record<string, Date>
+): JulesSource[] {
+  return [...sources].sort((a, b) => {
+    const nameA = a.githubRepo?.repo || "";
+    const nameB = b.githubRepo?.repo || "";
+
+    const timeA = lastExecutedTimes[nameA] ? lastExecutedTimes[nameA].getTime() : 0;
+    const timeB = lastExecutedTimes[nameB] ? lastExecutedTimes[nameB].getTime() : 0;
+
+    if (timeA !== timeB) {
+      return timeA - timeB;
+    }
+    return nameA.localeCompare(nameB);
+  });
+}
+
+/**
+ * 選択されたソースに対してセッション作成計画を構築します。
+ */
+export async function buildSessionRequests(
+  sources: JulesSource[],
+  githubOwner: string
+): Promise<SessionRequestPlan[]> {
+  const plans: SessionRequestPlan[] = [];
+
+  for (const source of sources) {
+    const repoName = source.githubRepo?.repo || "";
+    if (!repoName) continue;
+
+    const startingBranch = await getRepoDefaultBranch(githubOwner, repoName);
+
+    plans.push({
+      source: source.name,
+      title: `[Jules] Daily Refactoring for ${repoName}`,
+      prompt: `Analyze this repository and perform general refactoring and documentation updates. This includes cleaning up unused code, simplifying complex functions, updating outdated patterns, optimizing performance, ensuring a clean and consistent coding style throughout the codebase, and updating or creating documentation (such as README.md, inline comments, or docs) to reflect current codebase status. Finally, prepare a Pull Request with your improvements.`,
+      taskType: "refactor",
+      repo: repoName,
+      startingBranch,
+    });
+  }
+
+  return plans;
+}
+
+/**
  * Jules API 呼び出しによるタスク自動化処理を実行します。
  *
  * @param options 自動化オプション
@@ -47,22 +144,17 @@ export async function executeJulesAutomation(
   options: JulesAutomationOptions
 ): Promise<JulesAutomationResult> {
   const { julesApiKey, githubOwner } = options;
-  const dryRun = options.dryRun !== false; // デフォルトは安全のため true
-  const task = options.task || "all";
+  const dryRun = options.dryRun !== false;
 
   // 起動1回あたりの実行リポジトリ数制限（デフォルト1、範囲1〜3）
-  let limit = 1;
-  if (options.limit !== undefined && options.limit !== null && !isNaN(options.limit)) {
-    limit = Math.max(1, Math.min(3, options.limit));
-  }
+  const limit = Math.max(1, Math.min(3, options.limit ?? 1));
 
   // Jules Sources（リポジトリ一覧）の取得
   const allSources = await listAllJulesSources(julesApiKey);
 
-  // 指定されたオーナーのリポジトリに絞り込む
+  // 指定されたオーナーのリポジトリに絞り込み
   const ownerSources = allSources.filter(
-    (source) =>
-      source.githubRepo?.owner.toLowerCase() === githubOwner.toLowerCase()
+    (source) => source.githubRepo?.owner.toLowerCase() === githubOwner.toLowerCase()
   );
 
   if (ownerSources.length === 0) {
@@ -73,26 +165,19 @@ export async function executeJulesAutomation(
     };
   }
 
-  // GitHub からアクティブなリポジトリ一覧（アーカイブ済みを除く）を取得（バックグラウンド処理のため Dependabot アラート取得はスキップ）
+  // GitHub からアクティブなリポジトリ一覧を取得（Dependabot アラートは不要）
   const activeReposMap = await getAllReposInfo({ includeDependabotAlerts: false });
-  const activeReposSet = new Set(
-    Array.from(activeReposMap.keys()).map((r) => r.toLowerCase())
-  );
 
-  // Jules 設定（曜日別起動設定・対象外リポジトリ）を取得
+  // Jules 設定（曜日別起動設定・対象外リポジトリ）の取得
   const julesConfig = await getJulesConfig();
 
   // 曜日別起動スケジュールの判定（JST 基準）
   if (!options.ignoreSchedule) {
-    const jstDay = new Intl.DateTimeFormat("en-US", {
-      timeZone: "Asia/Tokyo",
-      weekday: "short",
-    }).format(new Date()).toLowerCase() as keyof JulesSchedule;
-
-    if (julesConfig.schedule && julesConfig.schedule[jstDay] === false) {
-      console.log(`[Jules Automation] 本日 (${jstDay}) はスケジュール設定により自動起動が無効化されているため、処理をスキップします。`);
+    const { disabled, currentDay } = isScheduleDisabledForToday(julesConfig.schedule);
+    if (disabled) {
+      console.log(`[Jules Automation] 本日 (${currentDay}) はスケジュール設定により自動起動が無効化されているため、処理をスキップします。`);
       return {
-        message: `Jules automation skipped: execution is disabled for today (${jstDay}) in schedule configuration.`,
+        message: `Jules automation skipped: execution is disabled for today (${currentDay}) in schedule configuration.`,
         succeeded: [],
         failed: [],
         dryRun,
@@ -101,20 +186,16 @@ export async function executeJulesAutomation(
     }
   }
 
-  // Firestore から非表示リポジトリを取得し、除外対象を判定
+  // 非表示リポジトリを取得
   const hiddenReposList = await getHiddenRepos();
-  const hiddenReposSet = new Set(hiddenReposList.map((r) => r.toLowerCase()));
-  const excludedReposSet = new Set((julesConfig.excludedRepos || []).map((r) => r.toLowerCase()));
 
-  // テンプレートリポジトリ（_template）、非表示リポジトリ、設定上の対象外リポジトリ、アーカイブ済み/非アクティブなリポジトリを自動リファクタリングの対象から除外
-  const targetSources = ownerSources.filter((source) => {
-    const repoName = source.githubRepo?.repo.toLowerCase() || "";
-    if (repoName === "_template") return false;
-    if (hiddenReposSet.has(repoName)) return false;
-    if (excludedReposSet.has(repoName)) return false;
-    if (!activeReposSet.has(repoName)) return false;
-    return true;
-  });
+  // 対象ソースの抽出
+  const targetSources = filterTargetSources(
+    ownerSources,
+    activeReposMap,
+    hiddenReposList,
+    julesConfig.excludedRepos || []
+  );
 
   if (targetSources.length === 0) {
     return {
@@ -124,68 +205,30 @@ export async function executeJulesAutomation(
     };
   }
 
-  // Firestore から最終実行日時履歴を取得し、ソートして実行対象リポジトリを選択
+  // 最終実行履歴に基づくソートと制限数の切り出し
   const lastExecutedTimes = await getRepoLastExecutedTimes();
+  const sortedTargetSources = sortSourcesByExecutionHistory(targetSources, lastExecutedTimes);
+  const selectedSources = sortedTargetSources.slice(0, limit);
 
-  const sortedTargetSources = [...targetSources].sort((a, b) => {
-    const nameA = a.githubRepo?.repo || "";
-    const nameB = b.githubRepo?.repo || "";
+  // セッション作成計画の構築
+  const sessionsToCreate = await buildSessionRequests(selectedSources, githubOwner);
 
-    const timeA = lastExecutedTimes[nameA] ? lastExecutedTimes[nameA].getTime() : 0;
-    const timeB = lastExecutedTimes[nameB] ? lastExecutedTimes[nameB].getTime() : 0;
-
-    if (timeA !== timeB) {
-      return timeA - timeB; // 最終実行日時が古い順（未実行=0が最優先）
-    }
-    return nameA.localeCompare(nameB); // 日時が同じ場合は辞書順で安定ソート
-  });
-
-  // 制限（1〜3）に基づいてターゲットリポジトリをスライス
-  const selectedTargetSources = sortedTargetSources.slice(0, limit);
-
-  // セッション作成のためのリクエスト計画リスト（リファクタリングのみ）
-  const sessionsToCreate: {
-    source: string;
-    title: string;
-    prompt: string;
-    taskType: "refactor";
-    repo: string;
-    startingBranch: string;
-  }[] = [];
-
-  // --- リファクタリングの計画 ---
-  for (const target of selectedTargetSources) {
-    const repoName = target.githubRepo?.repo || "";
-    if (!repoName) continue;
-
-    const startingBranch = await getRepoDefaultBranch(githubOwner, repoName);
-
-    sessionsToCreate.push({
-      source: target.name,
-      title: `[Jules] Daily Refactoring for ${repoName}`,
-      prompt: `Analyze this repository and perform general refactoring and documentation updates. This includes cleaning up unused code, simplifying complex functions, updating outdated patterns, optimizing performance, ensuring a clean and consistent coding style throughout the codebase, and updating or creating documentation (such as README.md, inline comments, or docs) to reflect current codebase status. Finally, prepare a Pull Request with your improvements.`,
-      taskType: "refactor",
-      repo: repoName,
-      startingBranch,
-    });
-  }
-
-  // Dry-run もしくは 実際の API 呼び出しの実行
+  // Dry-run モードの処理
   if (dryRun) {
-    console.log(`[Dry-run] Jules 自動化タスク候補 (${sessionsToCreate.length}件、対象リポジトリ: ${selectedTargetSources.length}件):`);
+    console.log(`[Dry-run] Jules 自動化タスク候補 (${sessionsToCreate.length}件、対象リポジトリ: ${selectedSources.length}件):`);
     sessionsToCreate.forEach((session) => {
       console.log(`- [${session.taskType}] ${session.title} (Source: ${session.source})`);
     });
 
     return {
-      message: `Dry-run completed. Simulated ${sessionsToCreate.length} Jules sessions for ${selectedTargetSources.length} repositories.`,
+      message: `Dry-run completed. Simulated ${sessionsToCreate.length} Jules sessions for ${selectedSources.length} repositories.`,
       sessions: sessionsToCreate,
-      selectedRepos: selectedTargetSources.map((s) => s.githubRepo?.repo || ""),
+      selectedRepos: selectedSources.map((s) => s.githubRepo?.repo || ""),
       dryRun: true,
     };
   }
 
-  // 24時間以内の残容量チェック（残容量10未満の場合はバッチ処理をスキップ）
+  // 24時間以内の残容量チェック
   const remainingCapacity = await getRemainingSessionCapacity(julesApiKey);
   if (remainingCapacity < 10) {
     console.log(`[Jules Automation] 直近24時間の残りセッション作成可能数 (${remainingCapacity}) が 10 未満のため、バッチ処理をスキップします。`);
@@ -262,7 +305,7 @@ export async function executeJulesAutomation(
     });
   }
 
-  // 成功したセッションに関連する子リポジトリの一覧を特定し、Firestore を更新
+  // 成功したセッションに関連する子リポジトリの最終実行日時を更新
   const succeededRepos = new Set<string>();
   succeeded.forEach((session) => {
     if (session.repo) {

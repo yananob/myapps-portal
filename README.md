@@ -1,22 +1,27 @@
-# Cloud Run Service Management Portal
+# MyApps Manager (Cloud Run Service & Repository Portal)
 
-Google Cloud プロジェクト内の Cloud Run サービスを一覧表示し、各サービスへのクイックアクセスを提供するポータルサイトです。
+Google Cloud プロジェクト内の Cloud Run サービスおよび GitHub リポジトリを一覧表示し、各アプリケーションへのクイックアクセスや Jules (AIエンジニア) 自動リファクタリング、テスト環境の自動削除を提供するポータルサイトです。
 
 ## 主な機能
 
-- **Cloud Run サービス一覧の自動取得**: Google Cloud SDK を使用して、指定したプロジェクト・リージョン内のサービスを自動的に取得します。
-- **GitHub 連携**: サービス名と一致する GitHub リポジトリへのリンク、および Issue ページへのリンクを自動生成します。
-- **Cloud Logging 直リンク**: 各サービスのログ確認画面へのショートカットを提供します。
-- **リアルタイムフィルタリング**: サービス名による高速な検索機能。
-- **レスポンシブデザイン**: Tailwind CSS を使用した、クリーンで使いやすい UI。
+- **リポジトリ・Cloud Run サービス一覧の一括管理**: GitHub API と Google Cloud SDK (@google-cloud/run) を連携し、リポジトリ単位で本番・テスト・イベント用 Cloud Run サービスをグループ化して一覧表示します。
+- **Jules (AIエンジニア) 連携 & 自動リファクタリング**: 画面または Pub/Sub イベント経由で Jules セッションを即時起動し、AI によるコード改善と PR 作成を自動化します。
+- **Dependabot アラート可視化**: オープンな Dependabot セキュリティアラートの有無と件数をリアルタイム表示します。
+- **非表示リポジトリ設定 & スケジュール管理**: Firestore を使用して画面表示から隠したいリポジトリや、Jules 自動化の曜日別起動スケジュール・対象外リポジトリを永続化・変更できます。
+- **テスト環境クリーンアップ**: 24時間以上更新のないテスト環境サービス (`-test`, `-test-event`) を自動検知・削除します。
+- **PWA / モバイル対応**: PWA (Progressive Web App) 対応でモバイル端末からの操作に最適化されています。
 
 ## 技術スタック
 
-- **Frontend/Backend**: Next.js (App Router)
+- **Frontend/Backend**: Next.js 15 (App Router), React 19, TypeScript
 - **UI**: Tailwind CSS, Lucide-react
-- **SDK/API**:
+- **Database**: Google Cloud Firestore (`@google-cloud/firestore`)
+- **API/SDK**:
   - `@google-cloud/run`
-  - `octokit` (GitHub API)
+  - `octokit` (GitHub REST API)
+- **Testing**: Vitest (`npm test`)
+
+---
 
 ## セットアップ
 
@@ -29,6 +34,9 @@ GCP_PROJECT_ID=your-project-id
 GCP_REGION=asia-northeast1
 GITHUB_PAT=your-github-personal-access-token
 GITHUB_OWNER=your-github-org-or-user
+JULES_API_KEY=your-jules-api-key
+CRON_SECRET=your-cron-secret
+APP_ENV=production # または test
 ```
 
 ### 開発サーバーの起動
@@ -38,122 +46,65 @@ npm install
 npm run dev
 ```
 
-### ビルドとデプロイ
+### テストの実行
 
 ```bash
-npm run build
-# Cloud Run 等へのデプロイ
+npm test
+# または
+./tests/run_tests.sh
 ```
-
-## Cloud Run デプロイ構成と Pub/Sub 起動方法
-
-### 1. HTTP サービスと Event サービスの分離（デプロイ構成）
-
-本プロジェクトでは、用途に応じて **HTTP サービス**（Web UI 用）と **Event サービス**（Pub/Sub・バッチ処理用）の 2 つの Cloud Run サービスを分離してデプロイします。
-
-- **HTTP サービス（例: `myapps-portal`）**
-  - **用途**: ユーザーがブラウザでアクセスする Web UI / 画面表示用。
-  - **アクセス制御**: `--allow-unauthenticated`（または IAP などによるユーザー認証保護）。
-- **Event サービス（例: `myapps-portal-event`）**
-  - **用途**: Cloud Pub/Sub や Eventarc などからのイベント通知・バッチ処理実行用（テストサービスの自動クリーンアップや Jules 自動化タスク等）。
-  - **アクセス制御**: `--no-allow-unauthenticated`（未認証アクセスの禁止）。Google Cloud 内部の認証済みサービスアカウントによるリクエストのみを許可します。
-
-#### 分離の理由・メリット
-1. **セキュリティ向上**: Web 画面への公開エンドポイントと、システム内部の特権処理（サービスの削除や自動化セッションの作成等）を行うイベント受信エンドポイントを分離することで、意図しない外部からの非認可アクセスを防止します。
-2. **リソース・ログの独立化**: 画面アクセス トラフィックとバッチ処理の負荷を独立してスケーリングさせ、ログの追跡・監視を容易にします。
 
 ---
 
-### 2. Pub/Sub からの起動・トリガー設定
+## API エンドポイント仕様
 
-Cloud Run サービスとしてデプロイ後、Pub/Sub トピックからのイベント通知によって処理を自動起動するための設定手順と動作の仕組みです。
+本システムで提供されている REST API エンドポイントの一覧です。
 
-#### 動作の仕組み
-1. **Middleware による内部ルーティング**:
-   Pub/Sub の Push サブスクリプションは、Cloud Run のルートパス (`/`) に `POST` リクエストを送信します。Next.js の Middleware (`src/middleware.ts`) がこれを検出すると、内部的に専用イベントルーティングエンドポイント (`/api/events`) へリライト (Rewrite) します。
-2. **バッチ処理のディスパッチ**:
-   `/api/events` (および `src/lib/event-router.ts`) はリクエスト内の Pub/Sub データ（`message.data` を Base64 デコードした JSON）やパラメータをパースし、指定された `command` パラメータに応じて以下の処理を実行・ディスパッチします。
-   - `command: "cleanup"` (デフォルト): 24時間以上更新のないテスト環境サービス (`-test`, `-test-event`) の削除処理。
-   - `command: "jules-automation"`: Jules (AIエンジニア) への自動タスク（テンプレート同期・リファクタリング）作成処理。
+### 1. `GET /api/services`
+- **概要**: 全リポジトリと対応する Cloud Run サービス情報を取得・結合して返します。
 
-#### 設定手順 (GCP Console / gcloud CLI)
+### 2. `POST /api/events`
+- **概要**: Pub/Sub や Cron スケジューラ等からのイベント通知を受信する汎用エンドポイント。
+- **認証**: `Authorization: Bearer ${CRON_SECRET}` または同一オリジンからのリクエスト。
+- **パラメータ / ペイロード**:
+  - `command`: `"cleanup"` (デフォルト) または `"jules-automation"`
+  - `dryRun`: `true` (デフォルト) / `false`
+  - `limit`: `1` 〜 `3` (Jules 自動化時の対象件数)
 
-1. **Pub/Sub トピックの作成**:
-   ```bash
-   gcloud pubsub topics create myapps-portal-event
-   ```
+### 3. `POST /api/jules-automation`
+- **概要**: Jules API を呼び出して自動リファクタリングセッションを作成します。
+- **パラメータ**:
+  - `dryRun`: シミュレーションの場合 `true`、実際にセッション作成時 `false`
+  - `limit`: 実行件数 (`1`〜`3`)
+  - `ignoreCooldown`: `true` の場合、10分間の二重起動チェックをバイパス
 
-2. **呼び出し用サービスアカウントの準備と権限付与**:
-   Push サブスクリプションが Cloud Run (Event サービス) を安全に呼び出せるよう、`roles/run.invoker` 権限を持つサービスアカウントを作成・設定します。
-   ```bash
-   # サービスアカウント作成
-   gcloud iam service-accounts create pubsub-cloudrun-invoker \
-       --display-name="Pub/Sub Cloud Run Invoker"
+### 4. `GET / POST /api/jules-config`
+- **概要**: Jules 自動化の曜日別起動スケジュール (JST) および対象外リポジトリ設定を取得・保存します。
 
-   # Event サービスへの起動権限を付与
-   gcloud run services add-iam-policy-binding myapps-portal-event \
-       --member="serviceAccount:pubsub-cloudrun-invoker@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
-       --role="roles/run.invoker" \
-       --region=asia-northeast1
-   ```
+### 5. `GET / POST /api/hidden-repos`
+- **概要**: ダッシュボードで非表示設定されたリポジトリ一覧を取得・更新します。
 
-3. **Pub/Sub Push サブスクリプションの作成**:
-   Push 送信先 URL に Event サービスのルート URL（例: `https://myapps-portal-event-xxx.run.app/`）を指定し、上記のサービスアカウントによる OIDC トークン認証を有効化します。
-   ```bash
-   gcloud pubsub subscriptions create myapps-portal-event-sub \
-       --topic=myapps-portal-event \
-       --push-endpoint="https://myapps-portal-event-xxx.run.app/" \
-       --push-auth-service-account="pubsub-cloudrun-invoker@YOUR_PROJECT_ID.iam.gserviceaccount.com"
-   ```
+### 6. `POST /api/cleanup`
+- **概要**: 24時間以上非アクティブなテスト環境サービスを削除します（`handleEventRequest` 経由）。
 
-#### メッセージ Payload の形式
+---
 
-Pub/Sub へパブリッシュするメッセージ本文 (JSON) の例:
+## Cloud Run デプロイ構成と Pub/Sub 起動
 
-- **クリーンアップ処理（Dry-run モード、シミュレーションのみ）**:
-  ```json
-  {
-    "command": "cleanup",
-    "dryRun": true
-  }
-  ```
-- **クリーンアップ処理（実際に削除を実行）**:
-  ```json
-  {
-    "command": "cleanup",
-    "dryRun": false
-  }
-  ```
-- **Jules 自動化タスク（Dry-run モード）**:
-  ```json
-  {
-    "command": "jules-automation",
-    "dryRun": true,
-    "task": "all",
-    "limit": 3
-  }
-  ```
-- **Jules 自動化タスク（実際のセッションを作成）**:
-  ```json
-  {
-    "command": "jules-automation",
-    "dryRun": false,
-    "task": "all",
-    "limit": 3
-  }
-  ```
+### 1. HTTP サービスと Event サービスの分離
 
-#### 手動トリガー・テスト実行
+本プロジェクトでは、用途に応じて 2 つの Cloud Run サービスを分離してデプロイします。
 
-gcloud CLI またはリポジトリ内のヘルパースクリプトを使用して、Pub/Sub トピックへメッセージを送信できます。
+- **HTTP サービス（例: `myapps-portal`）**
+  - Web UI 表示用（`--allow-unauthenticated`）
+- **Event サービス（例: `myapps-portal-event`）**
+  - Pub/Sub・バッチ処理実行用（`--no-allow-unauthenticated`）
 
-```bash
-# gcloud CLI を使用した直接送信例
-gcloud pubsub topics publish myapps-portal-event --message='{"command": "cleanup", "dryRun": true}'
+### 2. Middleware による内部ルーティング
 
-# リポジトリ内のスクリプトを使用した送信例
-./tests/trigger_event_cloud.sh cleanup true
-```
+Pub/Sub の Push サブスクリプションが送信するルートパス (`/`) への `POST` リクエストは、`src/middleware.ts` により内部的に `/api/events` へリライト処理されます。
+
+---
 
 ## ライセンス
 
