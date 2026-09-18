@@ -10,68 +10,82 @@ export interface ParsedEventPayload {
   ignoreCooldown?: boolean;
 }
 
+interface RawEventData {
+  command?: string;
+  dryRun?: boolean;
+  task?: string;
+  limit?: number;
+  ignoreCooldown?: boolean;
+}
+
+/**
+ * JSオブジェクトからイベント用フィールドを抽出します。
+ */
+function extractPayloadFromObject(obj: Record<string, any>): RawEventData {
+  const result: RawEventData = {};
+
+  if (typeof obj.command !== "undefined") {
+    result.command = String(obj.command);
+  }
+  if (typeof obj.dryRun !== "undefined") {
+    result.dryRun = obj.dryRun === true || obj.dryRun === "true";
+  }
+  if (typeof obj.task !== "undefined") {
+    result.task = String(obj.task);
+  }
+  if (typeof obj.limit !== "undefined") {
+    const parsedLimit = Number(obj.limit);
+    if (!isNaN(parsedLimit)) {
+      result.limit = parsedLimit;
+    }
+  }
+  if (typeof obj.ignoreCooldown !== "undefined") {
+    result.ignoreCooldown = obj.ignoreCooldown === true || obj.ignoreCooldown === "true";
+  }
+
+  return result;
+}
+
+/**
+ * リクエストボディおよび Pub/Sub メッセージ (Base64) からパラメータを解読・抽出します。
+ */
+async function parseRequestBody(request: NextRequest): Promise<RawEventData> {
+  try {
+    const text = await request.clone().text();
+    if (!text) return {};
+
+    const body = JSON.parse(text);
+    if (!body || typeof body !== "object") return {};
+
+    let extracted = extractPayloadFromObject(body);
+
+    // Pub/Sub Push サブスクリプションメッセージの場合は data 部をデコードして上書き/追加
+    if (body.message?.data) {
+      try {
+        const decodedData = Buffer.from(body.message.data, "base64").toString("utf-8");
+        const parsedData = JSON.parse(decodedData);
+        if (parsedData && typeof parsedData === "object") {
+          extracted = {
+            ...extracted,
+            ...extractPayloadFromObject(parsedData),
+          };
+        }
+      } catch {
+        // Pub/Sub データデコード失敗時はボディから抽出した値を使用
+      }
+    }
+
+    return extracted;
+  } catch {
+    return {};
+  }
+}
+
 /**
  * リクエストからイベント用パラメータ（command, dryRun, task, limit, ignoreCooldown）を抽出・解析します。
  */
 export async function parseEventParams(request: NextRequest): Promise<ParsedEventPayload> {
-  let bodyCommand: string | null = null;
-  let bodyDryRun: boolean | null = null;
-  let bodyTask: string | null = null;
-  let bodyLimit: number | null = null;
-  let bodyIgnoreCooldown: boolean | null = null;
-
-  try {
-    const text = await request.clone().text();
-    if (text) {
-      const body = JSON.parse(text);
-      if (body) {
-        if (typeof body.command !== "undefined") {
-          bodyCommand = body.command;
-        }
-        if (typeof body.dryRun !== "undefined") {
-          bodyDryRun = body.dryRun === true || body.dryRun === "true";
-        }
-        if (typeof body.task !== "undefined") {
-          bodyTask = body.task;
-        }
-        if (typeof body.limit !== "undefined") {
-          bodyLimit = Number(body.limit);
-        }
-        if (typeof body.ignoreCooldown !== "undefined") {
-          bodyIgnoreCooldown = body.ignoreCooldown === true || body.ignoreCooldown === "true";
-        }
-
-        // Pub/Subメッセージの場合は data 部をデコードして確認
-        if (body.message?.data) {
-          try {
-            const decodedData = Buffer.from(body.message.data, "base64").toString("utf-8");
-            const parsedData = JSON.parse(decodedData);
-            if (parsedData) {
-              if (parsedData.command) {
-                bodyCommand = parsedData.command;
-              }
-              if (typeof parsedData.dryRun !== "undefined") {
-                bodyDryRun = parsedData.dryRun === true || parsedData.dryRun === "true";
-              }
-              if (parsedData.task) {
-                bodyTask = parsedData.task;
-              }
-              if (typeof parsedData.limit !== "undefined") {
-                bodyLimit = Number(parsedData.limit);
-              }
-              if (typeof parsedData.ignoreCooldown !== "undefined") {
-                bodyIgnoreCooldown = parsedData.ignoreCooldown === true || parsedData.ignoreCooldown === "true";
-              }
-            }
-          } catch (e) {
-            // デコード/パースエラーは無視
-          }
-        }
-      }
-    }
-  } catch (e) {
-    // ボディがない、またはパースエラーの場合は無視
-  }
+  const bodyData = await parseRequestBody(request);
 
   // URLクエリパラメータの読み込み
   const urlString = request.url || "http://localhost/api/events";
@@ -82,30 +96,32 @@ export async function parseEventParams(request: NextRequest): Promise<ParsedEven
   const limitQuery = searchParams.get("limit");
   const ignoreCooldownQuery = searchParams.get("ignoreCooldown");
 
-  // commandの優先順位: クエリパラメータ > リクエストボディ / Pub/Subデータ > デフォルト("cleanup")
-  const command = commandQuery || bodyCommand || "cleanup";
+  // command の優先順位: クエリパラメータ > ボディ / Pub/Sub > デフォルト("cleanup")
+  const command = commandQuery || bodyData.command || "cleanup";
 
-  // dryRunの優先順位: クエリパラメータ > リクエストボディ / Pub/Subデータ > デフォルト(true)
+  // dryRun の優先順位: クエリパラメータ > ボディ / Pub/Sub > デフォルト(true)
   let dryRun = true;
   if (dryRunQuery !== null) {
     dryRun = dryRunQuery !== "false";
-  } else if (bodyDryRun !== null) {
-    dryRun = bodyDryRun;
+  } else if (typeof bodyData.dryRun !== "undefined") {
+    dryRun = bodyData.dryRun;
   }
 
-  const task = taskQuery || bodyTask || "all";
+  const task = taskQuery || bodyData.task || "all";
 
   let limit: number | undefined = undefined;
-  const rawLimit = limitQuery !== null ? Number(limitQuery) : bodyLimit;
-  if (rawLimit !== null && !isNaN(rawLimit)) {
-    limit = rawLimit;
+  if (limitQuery !== null) {
+    const rawLimit = Number(limitQuery);
+    if (!isNaN(rawLimit)) limit = rawLimit;
+  } else if (typeof bodyData.limit !== "undefined") {
+    limit = bodyData.limit;
   }
 
   let ignoreCooldown: boolean | undefined = undefined;
   if (ignoreCooldownQuery !== null) {
     ignoreCooldown = ignoreCooldownQuery === "true";
-  } else if (bodyIgnoreCooldown !== null) {
-    ignoreCooldown = bodyIgnoreCooldown;
+  } else if (typeof bodyData.ignoreCooldown !== "undefined") {
+    ignoreCooldown = bodyData.ignoreCooldown;
   }
 
   return { command, dryRun, task, limit, ignoreCooldown };
@@ -138,7 +154,7 @@ export function verifyEventAuth(request: NextRequest): { authorized: boolean; er
         if (new URL(origin).host === host) {
           return { authorized: true };
         }
-      } catch (e) {
+      } catch {
         // 無効なURLの場合は無視
       }
     }
@@ -147,7 +163,7 @@ export function verifyEventAuth(request: NextRequest): { authorized: boolean; er
         if (new URL(referer).host === host) {
           return { authorized: true };
         }
-      } catch (e) {
+      } catch {
         // 無効なURLの場合は無視
       }
     }
