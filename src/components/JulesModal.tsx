@@ -28,13 +28,13 @@ export const JulesModal: React.FC<JulesModalProps> = ({
 
   // Jules 設定（曜日別スケジュール & 対象外リポジトリ）用のステート
   const [julesSchedule, setJulesSchedule] = useState<JulesSchedule>({
-    sun: true,
-    mon: true,
-    tue: true,
-    wed: true,
-    thu: true,
-    fri: true,
-    sat: true,
+    sun: 10,
+    mon: 10,
+    tue: 10,
+    wed: 10,
+    thu: 10,
+    fri: 10,
+    sat: 10,
   });
   const [excludedRepos, setExcludedRepos] = useState<Set<string>>(new Set());
   const [isLoadingJulesConfig, setIsLoadingJulesConfig] = useState(false);
@@ -316,12 +316,12 @@ export const JulesModal: React.FC<JulesModalProps> = ({
                 {/* 曜日別自動起動設定 */}
                 <div>
                   <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">
-                    曜日別自動起動スケジュール（JST）
+                    曜日別必要残容量設定（JST）
                   </h3>
                   <p className="text-xs text-slate-500 mb-3">
-                    Cron等による定期実行時に、自動起動を許可する曜日を選択してください。
+                    直近24時間の残り枠（15 - 起動数）が指定した数値以上ある場合に自動起動します。「OFF」に設定するとその曜日の自動起動はスキップされます。
                   </p>
-                  <div className="grid grid-cols-7 gap-1">
+                  <div className="grid grid-cols-7 gap-1.5">
                     {[
                       { key: "sun", label: "日" },
                       { key: "mon", label: "月" },
@@ -332,29 +332,40 @@ export const JulesModal: React.FC<JulesModalProps> = ({
                       { key: "sat", label: "土" },
                     ].map(({ key, label }) => {
                       const dayKey = key as keyof JulesSchedule;
-                      const isChecked = julesSchedule[dayKey];
+                      const value = julesSchedule[dayKey] ?? 10;
+                      const isOff = value > 15;
                       return (
-                        <button
+                        <div
                           key={key}
-                          type="button"
-                          onClick={() => {
-                            setJulesSchedule((prev) => ({
-                              ...prev,
-                              [dayKey]: !prev[dayKey],
-                            }));
-                          }}
                           className={cn(
-                            "py-2 text-xs font-semibold rounded-lg border transition-all flex flex-col items-center gap-1",
-                            isChecked
-                              ? "bg-amber-500 border-amber-600 text-white shadow-xs"
-                              : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500"
+                            "p-1.5 rounded-lg border flex flex-col items-center gap-1 transition-all",
+                            !isOff
+                              ? "bg-amber-50/50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800"
+                              : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 opacity-60"
                           )}
                         >
-                          <span>{label}</span>
-                          <span className="text-[10px] font-normal opacity-90">
-                            {isChecked ? "ON" : "OFF"}
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                            {label}
                           </span>
-                        </button>
+                          <select
+                            value={value}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              setJulesSchedule((prev) => ({
+                                ...prev,
+                                [dayKey]: val,
+                              }));
+                            }}
+                            className="w-full text-[11px] font-medium py-1 px-0.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-center text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                          >
+                            <option value={16}>OFF</option>
+                            {Array.from({ length: 16 }, (_, i) => (
+                              <option key={i} value={i}>
+                                残{i}+
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       );
                     })}
                   </div>

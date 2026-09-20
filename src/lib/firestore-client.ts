@@ -168,15 +168,16 @@ export async function getHiddenRepos(): Promise<string[]> {
 
 /**
  * Jules 自動化の曜日別起動スケジュール設定
+ * 各曜日の値は必要残容量しきい値（0〜15）、または 16（無効/OFF）を示します。
  */
 export interface JulesSchedule {
-  sun: boolean;
-  mon: boolean;
-  tue: boolean;
-  wed: boolean;
-  thu: boolean;
-  fri: boolean;
-  sat: boolean;
+  sun: number;
+  mon: number;
+  tue: number;
+  wed: number;
+  thu: number;
+  fri: number;
+  sat: number;
 }
 
 /**
@@ -188,20 +189,36 @@ export interface JulesConfig {
 }
 
 /**
- * Jules 自動化のデフォルト設定
+ * Jules 自動化のデフォルト設定（デフォルトでは全曜日残容量10以上で起動）
  */
 export const DEFAULT_JULES_CONFIG: JulesConfig = {
   schedule: {
-    sun: true,
-    mon: true,
-    tue: true,
-    wed: true,
-    thu: true,
-    fri: true,
-    sat: true,
+    sun: 10,
+    mon: 10,
+    tue: 10,
+    wed: 10,
+    thu: 10,
+    fri: 10,
+    sat: 10,
   },
   excludedRepos: [],
 };
+
+/**
+ * スケジュール値（数値または過去のブール値）を評価し、数値の必要残容量に変換します。
+ */
+export function parseScheduleDayValue(val: unknown, defaultValue: number = 10): number {
+  if (typeof val === "number" && !isNaN(val)) {
+    return Math.min(16, Math.max(0, Math.floor(val)));
+  }
+  if (val === true) {
+    return 10;
+  }
+  if (val === false) {
+    return 16;
+  }
+  return defaultValue;
+}
 
 /**
  * Jules 自動化設定（曜日別起動設定および対象外リポジトリ一覧）を取得します。
@@ -225,13 +242,13 @@ export async function getJulesConfig(): Promise<JulesConfig> {
     const data = doc.data();
     return {
       schedule: {
-        sun: data?.schedule?.sun ?? DEFAULT_JULES_CONFIG.schedule.sun,
-        mon: data?.schedule?.mon ?? DEFAULT_JULES_CONFIG.schedule.mon,
-        tue: data?.schedule?.tue ?? DEFAULT_JULES_CONFIG.schedule.tue,
-        wed: data?.schedule?.wed ?? DEFAULT_JULES_CONFIG.schedule.wed,
-        thu: data?.schedule?.thu ?? DEFAULT_JULES_CONFIG.schedule.thu,
-        fri: data?.schedule?.fri ?? DEFAULT_JULES_CONFIG.schedule.fri,
-        sat: data?.schedule?.sat ?? DEFAULT_JULES_CONFIG.schedule.sat,
+        sun: parseScheduleDayValue(data?.schedule?.sun, DEFAULT_JULES_CONFIG.schedule.sun),
+        mon: parseScheduleDayValue(data?.schedule?.mon, DEFAULT_JULES_CONFIG.schedule.mon),
+        tue: parseScheduleDayValue(data?.schedule?.tue, DEFAULT_JULES_CONFIG.schedule.tue),
+        wed: parseScheduleDayValue(data?.schedule?.wed, DEFAULT_JULES_CONFIG.schedule.wed),
+        thu: parseScheduleDayValue(data?.schedule?.thu, DEFAULT_JULES_CONFIG.schedule.thu),
+        fri: parseScheduleDayValue(data?.schedule?.fri, DEFAULT_JULES_CONFIG.schedule.fri),
+        sat: parseScheduleDayValue(data?.schedule?.sat, DEFAULT_JULES_CONFIG.schedule.sat),
       },
       excludedRepos: Array.isArray(data?.excludedRepos) ? data.excludedRepos : DEFAULT_JULES_CONFIG.excludedRepos,
     };

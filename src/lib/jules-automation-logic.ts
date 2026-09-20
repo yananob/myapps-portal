@@ -50,15 +50,27 @@ export interface SessionRequestPlan {
 }
 
 /**
- * 本日の曜日（JST基準）において自動起動が無効化されているかを判定します。
+ * 本日の曜日（JST基準）における必要残容量（しきい値）および自動起動が無効化されているかを判定します。
  */
-export function isScheduleDisabledForToday(schedule?: JulesSchedule): { disabled: boolean; currentDay: string } {
+export function getScheduleForToday(schedule?: JulesSchedule): { disabled: boolean; requiredCapacity: number; currentDay: string } {
   const currentDay = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Tokyo",
     weekday: "short",
   }).format(new Date()).toLowerCase() as keyof JulesSchedule;
 
-  const disabled = Boolean(schedule && schedule[currentDay] === false);
+  const dayVal = schedule ? schedule[currentDay] : 10;
+  // dayVal > 15 または 16 の場合は OFF (無効)
+  const requiredCapacity = typeof dayVal === "number" ? dayVal : 10;
+  const disabled = requiredCapacity > 15;
+
+  return { disabled, requiredCapacity, currentDay };
+}
+
+/**
+ * 互換性のための非推奨ラッパー関数
+ */
+export function isScheduleDisabledForToday(schedule?: JulesSchedule): { disabled: boolean; currentDay: string } {
+  const { disabled, currentDay } = getScheduleForToday(schedule);
   return { disabled, currentDay };
 }
 
@@ -171,9 +183,11 @@ export async function executeJulesAutomation(
   // Jules 設定（曜日別起動設定・対象外リポジトリ）の取得
   const julesConfig = await getJulesConfig();
 
-  // 曜日別起動スケジュールの判定（JST 基準）
+  // 曜日別起動スケジュール・必要残容量の判定（JST 基準）
+  let requiredCapacity = 10;
   if (!options.ignoreSchedule) {
-    const { disabled, currentDay } = isScheduleDisabledForToday(julesConfig.schedule);
+    const { disabled, requiredCapacity: reqCap, currentDay } = getScheduleForToday(julesConfig.schedule);
+    requiredCapacity = reqCap;
     if (disabled) {
       console.log(`[Jules Automation] 本日 (${currentDay}) はスケジュール設定により自動起動が無効化されているため、処理をスキップします。`);
       return {
@@ -228,12 +242,12 @@ export async function executeJulesAutomation(
     };
   }
 
-  // 24時間以内の残容量チェック
+  // 24時間以内の残容量チェック（本日の曜日設定による必要残容量しきい値と比較）
   const remainingCapacity = await getRemainingSessionCapacity(julesApiKey);
-  if (remainingCapacity < 10) {
-    console.log(`[Jules Automation] 直近24時間の残りセッション作成可能数 (${remainingCapacity}) が 10 未満のため、バッチ処理をスキップします。`);
+  if (remainingCapacity < requiredCapacity) {
+    console.log(`[Jules Automation] 直近24時間の残りセッション作成可能数 (${remainingCapacity}) が必要残容量 (${requiredCapacity}) 未満のため、バッチ処理をスキップします。`);
     return {
-      message: `Jules automation skipped: insufficient session capacity (${remainingCapacity} remaining, minimum required is 10).`,
+      message: `Jules automation skipped: insufficient session capacity (${remainingCapacity} remaining, minimum required is ${requiredCapacity}).`,
       succeeded: [],
       failed: [],
       dryRun: false,

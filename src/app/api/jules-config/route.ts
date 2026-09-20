@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getJulesConfig, setJulesConfig, JulesConfig } from "@/lib/firestore-client";
+import { getJulesConfig, setJulesConfig, JulesConfig, parseScheduleDayValue } from "@/lib/firestore-client";
 
 /**
  * Jules 自動化設定（曜日別スケジュール・対象外リポジトリ）を取得します。
@@ -39,13 +39,13 @@ export async function POST(request: Request) {
 
     const newConfig: JulesConfig = {
       schedule: {
-        sun: Boolean(schedule.sun),
-        mon: Boolean(schedule.mon),
-        tue: Boolean(schedule.tue),
-        wed: Boolean(schedule.wed),
-        thu: Boolean(schedule.thu),
-        fri: Boolean(schedule.fri),
-        sat: Boolean(schedule.sat),
+        sun: parseScheduleDayValue(schedule.sun),
+        mon: parseScheduleDayValue(schedule.mon),
+        tue: parseScheduleDayValue(schedule.tue),
+        wed: parseScheduleDayValue(schedule.wed),
+        thu: parseScheduleDayValue(schedule.thu),
+        fri: parseScheduleDayValue(schedule.fri),
+        sat: parseScheduleDayValue(schedule.sat),
       },
       excludedRepos: excludedRepos.map((r: any) => String(r)),
     };

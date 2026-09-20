@@ -46,9 +46,15 @@ vi.mock("@/lib/firestore-client", () => ({
   setJulesConfig: vi.fn(),
   DEFAULT_JULES_CONFIG: {
     schedule: {
-      sun: true, mon: true, tue: true, wed: true, thu: true, fri: true, sat: true,
+      sun: 10, mon: 10, tue: 10, wed: 10, thu: 10, fri: 10, sat: 10,
     },
     excludedRepos: [],
+  },
+  parseScheduleDayValue: (val: unknown, defaultValue: number = 10) => {
+    if (typeof val === "number" && !isNaN(val)) return Math.min(16, Math.max(0, Math.floor(val)));
+    if (val === true) return 10;
+    if (val === false) return 16;
+    return defaultValue;
   },
   getRootCollectionName: () => {
     const appEnv = process.env.APP_ENV;
@@ -667,7 +673,7 @@ describe("Jules Automation API エンドポイントのテスト", () => {
     expect(body.selectedRepos).toEqual(["app-one"]);
   });
 
-  it("残容量が10未満（例: 9）の場合、dryRun=false でのバッチ実行がスキップ(skipped=true)されること", async () => {
+  it("残容量が設定したしきい値未満（例: しきい値10に対して残量9）の場合、dryRun=false でのバッチ実行がスキップ(skipped=true)されること", async () => {
     const mockSources = [
       {
         name: "sources/github/test-owner/app-one",
@@ -688,7 +694,7 @@ describe("Jules Automation API エンドポイントのテスト", () => {
     expect(createJulesSession).not.toHaveBeenCalled();
   });
 
-  it("残容量が10以上（例: 10）の場合、dryRun=false でのバッチ実行が正常に実行されること", async () => {
+  it("残容量が設定したしきい値以上（例: しきい値10に対して残量10）の場合、dryRun=false でのバッチ実行が正常に実行されること", async () => {
     const mockSources = [
       {
         name: "sources/github/test-owner/app-one",
@@ -714,6 +720,87 @@ describe("Jules Automation API エンドポイントのテスト", () => {
     expect(body.skipped).toBeUndefined();
     expect(body.succeeded).toHaveLength(1);
     expect(createJulesSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("曜日ごとの必要残容量設定（カスタマイズ値）が正しく評価されること", async () => {
+    const mockSources = [
+      {
+        name: "sources/github/test-owner/app-one",
+        id: "github/test-owner/app-one",
+        githubRepo: { owner: "test-owner", repo: "app-one" },
+      },
+    ];
+    vi.mocked(listAllJulesSources).mockResolvedValue(mockSources);
+    vi.mocked(createJulesSession).mockResolvedValue({
+      name: "sessions/mock-session",
+      id: "mock-id",
+      title: "mock",
+      prompt: "mock",
+      sourceContext: { source: "sources/github/test-owner/app-one" },
+    });
+
+    // 全曜日の必要残容量を 5 に設定
+    vi.mocked(getJulesConfig).mockResolvedValue({
+      schedule: { sun: 5, mon: 5, tue: 5, wed: 5, thu: 5, fri: 5, sat: 5 },
+      excludedRepos: [],
+    });
+
+    // 残量が 6（必要数 5 以上）の場合は成功
+    vi.mocked(getRemainingSessionCapacity).mockResolvedValue(6);
+
+    const { executeJulesAutomation } = await vi.importActual<typeof import("@/lib/jules-automation-logic")>("@/lib/jules-automation-logic");
+
+    const resultSuccess = await executeJulesAutomation({
+      dryRun: false,
+      julesApiKey: "test-key",
+      githubOwner: "test-owner",
+      ignoreSchedule: false,
+      ignoreCooldown: true,
+    });
+    expect(resultSuccess.skipped).toBeUndefined();
+    expect(resultSuccess.succeeded).toHaveLength(1);
+
+    // 残量が 4（必要数 5 未満）の場合はスキップ
+    vi.mocked(getRemainingSessionCapacity).mockResolvedValue(4);
+
+    const resultSkipped = await executeJulesAutomation({
+      dryRun: false,
+      julesApiKey: "test-key",
+      githubOwner: "test-owner",
+      ignoreSchedule: false,
+      ignoreCooldown: true,
+    });
+    expect(resultSkipped.skipped).toBe(true);
+    expect(resultSkipped.message).toContain("minimum required is 5");
+  });
+
+  it("曜日設定が 16 (OFF) の場合、自動起動がスキップ(skipped=true)されること", async () => {
+    const mockSources = [
+      {
+        name: "sources/github/test-owner/app-one",
+        id: "github/test-owner/app-one",
+        githubRepo: { owner: "test-owner", repo: "app-one" },
+      },
+    ];
+    vi.mocked(listAllJulesSources).mockResolvedValue(mockSources);
+
+    // 全曜日 OFF (16) の設定を返す
+    vi.mocked(getJulesConfig).mockResolvedValue({
+      schedule: { sun: 16, mon: 16, tue: 16, wed: 16, thu: 16, fri: 16, sat: 16 },
+      excludedRepos: [],
+    });
+
+    const { executeJulesAutomation } = await vi.importActual<typeof import("@/lib/jules-automation-logic")>("@/lib/jules-automation-logic");
+
+    const result = await executeJulesAutomation({
+      dryRun: false,
+      julesApiKey: "test-key",
+      githubOwner: "test-owner",
+      ignoreSchedule: false,
+    });
+
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain("disabled for today");
   });
 
   it("Jules 設定で除外されたリポジトリ (excludedRepos) が自動処理から除外されること", async () => {
@@ -742,33 +829,13 @@ describe("Jules Automation API エンドポイントのテスト", () => {
     expect(body.selectedRepos).toEqual(["app-two"]);
   });
 
-  it("当日の曜日スケジュールが false の場合、ignoreSchedule なしの自動実行がスキップ(skipped=true)されること", async () => {
-    const mockSources = [
-      {
-        name: "sources/github/test-owner/app-one",
-        id: "github/test-owner/app-one",
-        githubRepo: { owner: "test-owner", repo: "app-one" },
-      },
-    ];
-    vi.mocked(listAllJulesSources).mockResolvedValue(mockSources);
-
-    // 全曜日起動 OFF の設定を返す
-    vi.mocked(getJulesConfig).mockResolvedValue({
-      schedule: { sun: false, mon: false, tue: false, wed: false, thu: false, fri: false, sat: false },
-      excludedRepos: [],
-    });
-
-    const { executeJulesAutomation } = await vi.importActual<typeof import("@/lib/jules-automation-logic")>("@/lib/jules-automation-logic");
-
-    const result = await executeJulesAutomation({
-      dryRun: false,
-      julesApiKey: "test-key",
-      githubOwner: "test-owner",
-      ignoreSchedule: false,
-    });
-
-    expect(result.skipped).toBe(true);
-    expect(result.message).toContain("disabled for today");
+  it("過去のブール値(false)を含む旧設定データが正しくOFF(16)にフォールバック処理されること", async () => {
+    const { parseScheduleDayValue } = await vi.importActual<typeof import("@/lib/firestore-client")>("@/lib/firestore-client");
+    expect(parseScheduleDayValue(true)).toBe(10);
+    expect(parseScheduleDayValue(false)).toBe(16);
+    expect(parseScheduleDayValue(5)).toBe(5);
+    expect(parseScheduleDayValue(20)).toBe(16);
+    expect(parseScheduleDayValue(-1)).toBe(0);
   });
 });
 
@@ -788,7 +855,7 @@ describe("Jules Config API エンドポイントのテスト", () => {
 
   it("POST /api/jules-config が有効な設定を更新・保存すること", async () => {
     const updatedConfig = {
-      schedule: { sun: false, mon: true, tue: true, wed: true, thu: true, fri: true, sat: false },
+      schedule: { sun: 16, mon: 10, tue: 10, wed: 10, thu: 10, fri: 10, sat: 16 },
       excludedRepos: ["app-excluded"],
     };
 
