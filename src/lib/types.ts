@@ -16,6 +16,8 @@ export interface ServiceGroup {
   hasDependabotAlerts?: boolean;
   dependabotAlertsCount?: number;
   dependabotUrl?: string;
+  openPullRequestsCount?: number;
+  pullRequestsUrl?: string;
 }
 
 export interface GitHubRepoInfo {
@@ -25,4 +27,6 @@ export interface GitHubRepoInfo {
   hasDependabotAlerts?: boolean;
   dependabotAlertsCount?: number;
   dependabotUrl?: string;
+  openPullRequestsCount?: number;
+  pullRequestsUrl?: string;
 }

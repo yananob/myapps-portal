@@ -64,4 +64,19 @@ describe('ServiceCard Component', () => {
     expect(disabledBtn).toBeDisabled();
     expect(disabledBtn).toHaveClass('cursor-not-allowed');
   });
+
+  it('renders open PR badge when openPullRequestsCount > 0 and pullRequestsUrl is provided', () => {
+    render(
+      <ServiceCard
+        baseName="sample-pr-app"
+        openPullRequestsCount={5}
+        pullRequestsUrl="https://github.com/test-owner/sample-pr-app/pulls"
+      />
+    );
+
+    const prBadge = screen.getByTitle('Open Pull Requests (5)');
+    expect(prBadge).toBeInTheDocument();
+    expect(prBadge).toHaveAttribute('href', 'https://github.com/test-owner/sample-pr-app/pulls');
+    expect(screen.getByText('PR (5)')).toBeInTheDocument();
+  });
 });
