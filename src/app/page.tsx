@@ -23,13 +23,21 @@ export default function Dashboard() {
 
   const CACHE_KEY = "myapps-portal-cache";
   const CACHE_TIME_KEY = "myapps-portal-cache-time";
+  const CACHE_HIDDEN_KEY = "myapps-portal-hidden-cache";
 
   const fetchHiddenRepos = async () => {
     try {
       const response = await fetch("/api/hidden-repos");
       const data = await response.json();
       if (response.ok && Array.isArray(data.hiddenRepos)) {
-        setHiddenIds(new Set(data.hiddenRepos));
+        const lowercasedSet = new Set<string>(
+          data.hiddenRepos.map((r: string) => r.toLowerCase())
+        );
+        setHiddenIds(lowercasedSet);
+        localStorage.setItem(
+          CACHE_HIDDEN_KEY,
+          JSON.stringify(Array.from(lowercasedSet))
+        );
       }
     } catch (e) {
       console.error("Failed to fetch hidden repos:", e);
@@ -43,8 +51,19 @@ export default function Dashboard() {
     if (useCache) {
       const cachedData = localStorage.getItem(CACHE_KEY);
       const cachedTime = localStorage.getItem(CACHE_TIME_KEY);
+      const cachedHidden = localStorage.getItem(CACHE_HIDDEN_KEY);
       if (cachedData && cachedTime) {
         setServiceGroups(JSON.parse(cachedData));
+        if (cachedHidden) {
+          try {
+            const parsedHidden = JSON.parse(cachedHidden);
+            if (Array.isArray(parsedHidden)) {
+              setHiddenIds(new Set(parsedHidden.map((r: string) => r.toLowerCase())));
+            }
+          } catch (e) {
+            console.error("Failed to parse cached hidden repos:", e);
+          }
+        }
         setLastUpdated(new Date(parseInt(cachedTime)));
         setLoading(false);
         return;
@@ -78,18 +97,24 @@ export default function Dashboard() {
   }, []);
 
   const toggleHide = async (baseName: string) => {
-    const isCurrentlyHidden = hiddenIds.has(baseName);
+    const key = baseName.toLowerCase();
+    const isCurrentlyHidden = hiddenIds.has(key);
     const newHiddenState = !isCurrentlyHidden;
 
-    setHiddenIds((prev) => {
-      const next = new Set(prev);
-      if (newHiddenState) {
-        next.add(baseName);
-      } else {
-        next.delete(baseName);
-      }
-      return next;
-    });
+    const updateHiddenState = (hidden: boolean) => {
+      setHiddenIds((prev) => {
+        const next = new Set(prev);
+        if (hidden) {
+          next.add(key);
+        } else {
+          next.delete(key);
+        }
+        localStorage.setItem(CACHE_HIDDEN_KEY, JSON.stringify(Array.from(next)));
+        return next;
+      });
+    };
+
+    updateHiddenState(newHiddenState);
 
     try {
       const response = await fetch("/api/hidden-repos", {
@@ -104,27 +129,11 @@ export default function Dashboard() {
       });
       if (!response.ok) {
         console.error("Failed to update hidden status on server");
-        setHiddenIds((prev) => {
-          const next = new Set(prev);
-          if (isCurrentlyHidden) {
-            next.add(baseName);
-          } else {
-            next.delete(baseName);
-          }
-          return next;
-        });
+        updateHiddenState(isCurrentlyHidden);
       }
     } catch (e) {
       console.error("Failed to toggle hidden repo status:", e);
-      setHiddenIds((prev) => {
-        const next = new Set(prev);
-        if (isCurrentlyHidden) {
-          next.add(baseName);
-        } else {
-          next.delete(baseName);
-        }
-        return next;
-      });
+      updateHiddenState(isCurrentlyHidden);
     }
   };
 
@@ -133,12 +142,12 @@ export default function Dashboard() {
       .filter((group) =>
         group.baseName.toLowerCase().includes(searchQuery.toLowerCase())
       )
-      .filter((group) => showHidden || !hiddenIds.has(group.baseName))
+      .filter((group) => showHidden || !hiddenIds.has(group.baseName.toLowerCase()))
       .filter((group) => !filterDependabotOnly || Boolean(group.hasDependabotAlerts))
       .filter((group) => !filterPrsOnly || (group.openPullRequestsCount !== undefined && group.openPullRequestsCount > 0))
       .sort((a, b) => {
-        const aHidden = hiddenIds.has(a.baseName);
-        const bHidden = hiddenIds.has(b.baseName);
+        const aHidden = hiddenIds.has(a.baseName.toLowerCase());
+        const bHidden = hiddenIds.has(b.baseName.toLowerCase());
         if (aHidden && !bHidden) return 1;
         if (!aHidden && bHidden) return -1;
         return 0;
@@ -298,7 +307,7 @@ export default function Dashboard() {
                   dependabotUrl={group.dependabotUrl}
                   openPullRequestsCount={group.openPullRequestsCount}
                   pullRequestsUrl={group.pullRequestsUrl}
-                  isHidden={hiddenIds.has(group.baseName)}
+                  isHidden={hiddenIds.has(group.baseName.toLowerCase())}
                   onToggleHide={toggleHide}
                 />
               ))}

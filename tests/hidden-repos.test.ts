@@ -84,5 +84,16 @@ describe("Hidden Repos API エンドポイントのテスト", () => {
       const data = await response.json();
       expect(data.error).toBe("無効な hidden フラグが指定されました。");
     });
+
+    it("setRepoHidden でエラーが発生した場合は 500 エラーを返すこと", async () => {
+      vi.mocked(setRepoHidden).mockRejectedValue(new Error("Firestore Error"));
+
+      const req = createPostRequest({ repo: "app-test", hidden: true });
+      const response = await POST(req);
+      expect(response.status).toBe(500);
+
+      const data = await response.json();
+      expect(data).toEqual({ error: "Firestore Error" });
+    });
   });
 });

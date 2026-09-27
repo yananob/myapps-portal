@@ -292,11 +292,12 @@ export async function setRepoHidden(repo: string, hidden: boolean): Promise<void
   try {
     const db = getFirestoreClient();
     const rootCollection = getRootCollectionName();
+    const docId = repo.toLowerCase();
     const docRef = db
       .collection(rootCollection)
       .doc("settings")
       .collection("hidden-repos")
-      .doc(repo);
+      .doc(docId);
 
     if (hidden) {
       await docRef.set({
@@ -311,5 +312,6 @@ export async function setRepoHidden(repo: string, hidden: boolean): Promise<void
     }
   } catch (error) {
     console.error(`Firestoreへの非表示設定（${repo}: ${hidden}）の保存に失敗しました:`, error);
+    throw error;
   }
 }

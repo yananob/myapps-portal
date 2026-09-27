@@ -380,13 +380,13 @@ export const JulesModal: React.FC<JulesModalProps> = ({
                     メイン画面に表示されているリポジトリの中から、Jules の自動リファクタリング対象から除外するリポジトリを選択してください。（※非表示にしたリポジトリやアーカイブのリポジトリは自動的に対象外となります）
                   </p>
                   <div className="max-h-48 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-lg p-2 space-y-1 bg-slate-50 dark:bg-slate-800/50">
-                    {serviceGroups.filter((group) => !hiddenIds.has(group.baseName)).length === 0 ? (
+                    {serviceGroups.filter((group) => !hiddenIds.has(group.baseName.toLowerCase())).length === 0 ? (
                       <p className="text-xs text-slate-400 py-2 text-center">
                         対象となるリポジトリがありません
                       </p>
                     ) : (
                       serviceGroups
-                        .filter((group) => !hiddenIds.has(group.baseName))
+                        .filter((group) => !hiddenIds.has(group.baseName.toLowerCase()))
                         .map((group) => {
                           const isExcluded = excludedRepos.has(group.baseName);
                           return (
