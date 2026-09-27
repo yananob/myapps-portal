@@ -55,6 +55,17 @@ describe("Hidden Repos API エンドポイントのテスト", () => {
       expect(setRepoHidden).toHaveBeenCalledWith("app-test", true);
     });
 
+    it("setRepoHidden が例外をスローした場合は 500 エラーを返すこと", async () => {
+      vi.mocked(setRepoHidden).mockRejectedValue(new Error("Firestore write error"));
+
+      const req = createPostRequest({ repo: "app-test", hidden: true });
+      const response = await POST(req);
+      expect(response.status).toBe(500);
+
+      const data = await response.json();
+      expect(data.error).toBe("Firestore write error");
+    });
+
     it("正しく repo と hidden パラメータが渡された場合に setRepoHidden を呼び出すこと (hidden=false)", async () => {
       vi.mocked(setRepoHidden).mockResolvedValue(undefined);
 

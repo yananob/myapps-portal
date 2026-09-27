@@ -157,7 +157,7 @@ export async function getHiddenRepos(): Promise<string[]> {
     snapshot.forEach((doc) => {
       const data = doc.data();
       if (data.hidden !== false) {
-        result.push(doc.id);
+        result.push(doc.id.toLowerCase());
       }
     });
   } catch (error) {
@@ -292,24 +292,28 @@ export async function setRepoHidden(repo: string, hidden: boolean): Promise<void
   try {
     const db = getFirestoreClient();
     const rootCollection = getRootCollectionName();
-    const docRef = db
+    const docId = repo.toLowerCase();
+    const collectionRef = db
       .collection(rootCollection)
       .doc("settings")
-      .collection("hidden-repos")
-      .doc(repo);
+      .collection("hidden-repos");
 
     if (hidden) {
-      await docRef.set({
+      await collectionRef.doc(docId).set({
         repoName: repo,
         hidden: true,
         updatedAt: new Date(),
       }, { merge: true });
       console.log(`Firestore (${rootCollection}) にリポジトリ ${repo} の非表示設定(hidden=true)を保存しました。`);
     } else {
-      await docRef.delete();
+      await collectionRef.doc(docId).delete();
+      if (docId !== repo) {
+        await collectionRef.doc(repo).delete().catch(() => {});
+      }
       console.log(`Firestore (${rootCollection}) からリポジトリ ${repo} の非表示設定を削除(hidden=false)しました。`);
     }
   } catch (error) {
     console.error(`Firestoreへの非表示設定（${repo}: ${hidden}）の保存に失敗しました:`, error);
+    throw error;
   }
 }
