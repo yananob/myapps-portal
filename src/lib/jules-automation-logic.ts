@@ -177,8 +177,8 @@ export async function executeJulesAutomation(
     };
   }
 
-  // GitHub からアクティブなリポジトリ一覧を取得（Dependabot アラートは不要）
-  const activeReposMap = await getAllReposInfo({ includeDependabotAlerts: false });
+  // GitHub からアクティブなリポジトリ一覧を取得（Dependabot アラートおよびオープン PR 取得は不要）
+  const activeReposMap = await getAllReposInfo({ includeDependabotAlerts: false, includeOpenPullRequests: false });
 
   // Jules 設定（曜日別起動設定・対象外リポジトリ）の取得
   const julesConfig = await getJulesConfig();

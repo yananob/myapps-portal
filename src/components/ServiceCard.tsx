@@ -1,5 +1,5 @@
 import React from "react";
-import { Github, MessageSquare, ListTodo, Globe, ExternalLink, Zap, Eye, EyeOff, ShieldAlert, FlaskConical } from "lucide-react";
+import { Github, MessageSquare, ListTodo, Globe, ExternalLink, Zap, Eye, EyeOff, ShieldAlert, FlaskConical, GitPullRequest } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ServiceInstance } from "@/lib/types";
 
@@ -15,6 +15,8 @@ interface ServiceCardProps {
   hasDependabotAlerts?: boolean;
   dependabotAlertsCount?: number;
   dependabotUrl?: string;
+  openPullRequestsCount?: number;
+  pullRequestsUrl?: string;
   isHidden?: boolean;
   onToggleHide?: (baseName: string) => void;
 }
@@ -106,6 +108,8 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({
   hasDependabotAlerts,
   dependabotAlertsCount,
   dependabotUrl,
+  openPullRequestsCount,
+  pullRequestsUrl,
   isHidden = false,
   onToggleHide,
 }) => {
@@ -117,7 +121,7 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({
       <div className="p-3 sm:p-4">
         {/* Name and Repo Links */}
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 flex-wrap sm:flex-nowrap">
             <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate" title={baseName}>
               {baseName}
             </h3>
@@ -144,6 +148,18 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({
               >
                 <ShieldAlert className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                 <span>Dependabot{dependabotAlertsCount !== undefined && dependabotAlertsCount > 0 ? ` (${dependabotAlertsCount})` : ""}</span>
+              </a>
+            )}
+            {openPullRequestsCount !== undefined && openPullRequestsCount > 0 && pullRequestsUrl && (
+              <a
+                href={pullRequestsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold text-blue-800 bg-blue-100 hover:bg-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:hover:bg-blue-900/80 rounded-full transition-colors shrink-0"
+                title={`Open Pull Requests (${openPullRequestsCount})`}
+              >
+                <GitPullRequest className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                <span>PR ({openPullRequestsCount})</span>
               </a>
             )}
           </div>

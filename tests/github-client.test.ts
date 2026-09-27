@@ -57,6 +57,15 @@ describe('getAllReposInfo', () => {
       }),
     } as any
 
+    octokitInstance.rest.pulls = {
+      list: vi.fn().mockImplementation(async ({ repo }) => {
+        if (repo === 'repo1') {
+          return { data: [{ id: 101 }, { id: 102 }, { id: 103 }] }
+        }
+        return { data: [] }
+      }),
+    } as any
+
     const result = await getAllReposInfo()
 
     expect(result.size).toBe(1)
@@ -71,9 +80,11 @@ describe('getAllReposInfo', () => {
     expect(repo1?.hasDependabotAlerts).toBe(true)
     expect(repo1?.dependabotAlertsCount).toBe(2)
     expect(repo1?.dependabotUrl).toBe('https://github.com/test-owner/repo1/security/dependabot')
+    expect(repo1?.openPullRequestsCount).toBe(3)
+    expect(repo1?.pullRequestsUrl).toBe('https://github.com/test-owner/repo1/pulls')
   })
 
-  it('skips Dependabot alerts when includeDependabotAlerts is false', async () => {
+  it('skips Dependabot alerts and open PRs when options are false', async () => {
     const mockRepos = [
       {
         name: 'repo1',
@@ -87,17 +98,23 @@ describe('getAllReposInfo', () => {
     vi.mocked(octokitInstance.paginate).mockResolvedValue(mockRepos as any)
 
     const listAlertsMock = vi.fn()
+    const listPullsMock = vi.fn()
     octokitInstance.rest.dependabot = {
       listAlertsForRepo: listAlertsMock,
     } as any
+    octokitInstance.rest.pulls = {
+      list: listPullsMock,
+    } as any
 
-    const result = await getAllReposInfo({ includeDependabotAlerts: false })
+    const result = await getAllReposInfo({ includeDependabotAlerts: false, includeOpenPullRequests: false })
 
     expect(result.size).toBe(1)
     expect(listAlertsMock).not.toHaveBeenCalled()
+    expect(listPullsMock).not.toHaveBeenCalled()
     const repo1 = result.get('repo1')
     expect(repo1?.hasDependabotAlerts).toBe(false)
     expect(repo1?.dependabotAlertsCount).toBe(0)
+    expect(repo1?.openPullRequestsCount).toBe(0)
   })
 
   it('throws error if GITHUB_OWNER is not set', async () => {
