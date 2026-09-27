@@ -150,7 +150,7 @@ export default function Dashboard() {
         const bHidden = hiddenIds.has(b.baseName.toLowerCase());
         if (aHidden && !bHidden) return 1;
         if (!aHidden && bHidden) return -1;
-        return 0;
+        return a.baseName.localeCompare(b.baseName);
       });
   }, [serviceGroups, searchQuery, hiddenIds, showHidden, filterDependabotOnly, filterPrsOnly]);
 
