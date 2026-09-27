@@ -9,8 +9,10 @@ export type { GitHubRepoInfo };
  */
 export async function getAllReposInfo(options?: {
   includeDependabotAlerts?: boolean;
+  includeOpenPullRequests?: boolean;
 }): Promise<Map<string, GitHubRepoInfo>> {
   const includeDependabotAlerts = options?.includeDependabotAlerts ?? true;
+  const includeOpenPullRequests = options?.includeOpenPullRequests ?? true;
   const githubPat = process.env.GITHUB_PAT;
   const githubOwner = process.env.GITHUB_OWNER;
 
@@ -35,47 +37,82 @@ export async function getAllReposInfo(options?: {
     );
 
     const alertsMap = new Map<string, { hasAlerts: boolean; count: number }>();
+    const prsMap = new Map<string, number>();
 
-    // 各リポジトリの Dependabot アラート並行取得（オプションで有効な場合のみ）
-    if (includeDependabotAlerts) {
-      const alertsResults = await Promise.allSettled(
-        activeRepos.map(async (repo) => {
-          try {
-            const response = await octokit.rest.dependabot.listAlertsForRepo({
-              owner: repo.owner.login,
-              repo: repo.name,
-              state: "open",
-              per_page: 100,
+    // 各リポジトリの Dependabot アラートおよび オープン PR 並行取得（オプションで有効な場合のみ）
+    await Promise.all([
+      includeDependabotAlerts
+        ? Promise.allSettled(
+            activeRepos.map(async (repo) => {
+              try {
+                const response = await octokit.rest.dependabot.listAlertsForRepo({
+                  owner: repo.owner.login,
+                  repo: repo.name,
+                  state: "open",
+                  per_page: 100,
+                });
+                const count = response.data ? response.data.length : 0;
+                return {
+                  repoName: repo.name,
+                  hasAlerts: count > 0,
+                  count,
+                };
+              } catch {
+                return {
+                  repoName: repo.name,
+                  hasAlerts: false,
+                  count: 0,
+                };
+              }
+            })
+          ).then((alertsResults) => {
+            alertsResults.forEach((res) => {
+              if (res.status === "fulfilled") {
+                alertsMap.set(res.value.repoName, {
+                  hasAlerts: res.value.hasAlerts,
+                  count: res.value.count,
+                });
+              }
             });
-            const count = response.data ? response.data.length : 0;
-            return {
-              repoName: repo.name,
-              hasAlerts: count > 0,
-              count,
-            };
-          } catch {
-            return {
-              repoName: repo.name,
-              hasAlerts: false,
-              count: 0,
-            };
-          }
-        })
-      );
+          })
+        : Promise.resolve(),
 
-      alertsResults.forEach((res) => {
-        if (res.status === "fulfilled") {
-          alertsMap.set(res.value.repoName, {
-            hasAlerts: res.value.hasAlerts,
-            count: res.value.count,
-          });
-        }
-      });
-    }
+      includeOpenPullRequests
+        ? Promise.allSettled(
+            activeRepos.map(async (repo) => {
+              try {
+                const response = await octokit.rest.pulls.list({
+                  owner: repo.owner.login,
+                  repo: repo.name,
+                  state: "open",
+                  per_page: 100,
+                });
+                const count = response.data ? response.data.length : 0;
+                return {
+                  repoName: repo.name,
+                  count,
+                };
+              } catch {
+                return {
+                  repoName: repo.name,
+                  count: 0,
+                };
+              }
+            })
+          ).then((prsResults) => {
+            prsResults.forEach((res) => {
+              if (res.status === "fulfilled") {
+                prsMap.set(res.value.repoName, res.value.count);
+              }
+            });
+          })
+        : Promise.resolve(),
+    ]);
 
     const repoMap = new Map<string, GitHubRepoInfo>();
     for (const repo of activeRepos) {
       const alertInfo = alertsMap.get(repo.name) || { hasAlerts: false, count: 0 };
+      const prCount = prsMap.get(repo.name) || 0;
       repoMap.set(repo.name, {
         repoUrl: repo.html_url,
         issueUrl: `${repo.html_url}/issues`,
@@ -83,6 +120,8 @@ export async function getAllReposInfo(options?: {
         hasDependabotAlerts: alertInfo.hasAlerts,
         dependabotAlertsCount: alertInfo.count,
         dependabotUrl: `${repo.html_url}/security/dependabot`,
+        openPullRequestsCount: prCount,
+        pullRequestsUrl: `${repo.html_url}/pulls`,
       });
     }
     return repoMap;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Search, Loader2, RefreshCw, AlertCircle, X, Eye, EyeOff, ShieldAlert, Zap } from "lucide-react";
+import { Search, Loader2, RefreshCw, AlertCircle, X, Eye, EyeOff, ShieldAlert, Zap, GitPullRequest } from "lucide-react";
 import { ServiceCard } from "@/components/ServiceCard";
 import { JulesModal } from "@/components/JulesModal";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,7 @@ export default function Dashboard() {
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [showHidden, setShowHidden] = useState(false);
   const [filterDependabotOnly, setFilterDependabotOnly] = useState(false);
+  const [filterPrsOnly, setFilterPrsOnly] = useState(false);
 
   // Jules 自動化ダイアログ表示ステート
   const [isJulesModalOpen, setIsJulesModalOpen] = useState(false);
@@ -134,6 +135,7 @@ export default function Dashboard() {
       )
       .filter((group) => showHidden || !hiddenIds.has(group.baseName))
       .filter((group) => !filterDependabotOnly || Boolean(group.hasDependabotAlerts))
+      .filter((group) => !filterPrsOnly || (group.openPullRequestsCount !== undefined && group.openPullRequestsCount > 0))
       .sort((a, b) => {
         const aHidden = hiddenIds.has(a.baseName);
         const bHidden = hiddenIds.has(b.baseName);
@@ -141,7 +143,7 @@ export default function Dashboard() {
         if (!aHidden && bHidden) return -1;
         return 0;
       });
-  }, [serviceGroups, searchQuery, hiddenIds, showHidden, filterDependabotOnly]);
+  }, [serviceGroups, searchQuery, hiddenIds, showHidden, filterDependabotOnly, filterPrsOnly]);
 
   return (
     <main className="container mx-auto px-4 py-8 max-w-7xl">
@@ -193,6 +195,18 @@ export default function Dashboard() {
               title={filterDependabotOnly ? "すべてのアイテムを表示" : "Dependabot アラートありのみ表示"}
             >
               <ShieldAlert className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setFilterPrsOnly(!filterPrsOnly)}
+              className={cn(
+                "p-2 transition-colors rounded-md flex items-center gap-1",
+                filterPrsOnly
+                  ? "text-blue-600 bg-blue-50 dark:bg-blue-900/30"
+                  : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              )}
+              title={filterPrsOnly ? "すべてのアイテムを表示" : "オープン PR ありのみ表示"}
+            >
+              <GitPullRequest className="w-5 h-5" />
             </button>
             <button
               onClick={() => setShowHidden(!showHidden)}
@@ -282,6 +296,8 @@ export default function Dashboard() {
                   hasDependabotAlerts={group.hasDependabotAlerts}
                   dependabotAlertsCount={group.dependabotAlertsCount}
                   dependabotUrl={group.dependabotUrl}
+                  openPullRequestsCount={group.openPullRequestsCount}
+                  pullRequestsUrl={group.pullRequestsUrl}
                   isHidden={hiddenIds.has(group.baseName)}
                   onToggleHide={toggleHide}
                 />

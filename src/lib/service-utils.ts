@@ -21,6 +21,8 @@ export function groupServices(services: ServiceListItem[], repoMap: Map<string, 
       hasDependabotAlerts: repoInfo.hasDependabotAlerts,
       dependabotAlertsCount: repoInfo.dependabotAlertsCount,
       dependabotUrl: repoInfo.dependabotUrl,
+      openPullRequestsCount: repoInfo.openPullRequestsCount,
+      pullRequestsUrl: repoInfo.pullRequestsUrl,
     });
   }
 
