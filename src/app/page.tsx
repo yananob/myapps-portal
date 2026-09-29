@@ -135,14 +135,7 @@ export default function Dashboard() {
       )
       .filter((group) => showHidden || !hiddenIds.has(group.baseName))
       .filter((group) => !filterDependabotOnly || Boolean(group.hasDependabotAlerts))
-      .filter((group) => !filterPrsOnly || (group.openPullRequestsCount !== undefined && group.openPullRequestsCount > 0))
-      .sort((a, b) => {
-        const aHidden = hiddenIds.has(a.baseName);
-        const bHidden = hiddenIds.has(b.baseName);
-        if (aHidden && !bHidden) return 1;
-        if (!aHidden && bHidden) return -1;
-        return 0;
-      });
+      .filter((group) => !filterPrsOnly || (group.openPullRequestsCount !== undefined && group.openPullRequestsCount > 0));
   }, [serviceGroups, searchQuery, hiddenIds, showHidden, filterDependabotOnly, filterPrsOnly]);
 
   return (
