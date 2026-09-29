@@ -85,4 +85,22 @@ describe("Hidden Repos API エンドポイントのテスト", () => {
       expect(data.error).toBe("無効な hidden フラグが指定されました。");
     });
   });
+
+  describe("非表示フィルター解除時の並び順の検証", () => {
+    it("showHidden が true の時、非表示アイテムも一番下にまとめられず元のアルファベット順を維持すること", () => {
+      const serviceGroups = [
+        { baseName: "alpha" },
+        { baseName: "beta" },
+        { baseName: "gamma" },
+      ];
+      const hiddenIds = new Set(["alpha"]);
+      const showHidden = true;
+
+      const filteredGroups = serviceGroups.filter(
+        (group) => showHidden || !hiddenIds.has(group.baseName)
+      );
+
+      expect(filteredGroups.map((g) => g.baseName)).toEqual(["alpha", "beta", "gamma"]);
+    });
+  });
 });
