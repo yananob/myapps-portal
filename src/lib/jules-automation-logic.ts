@@ -19,6 +19,7 @@ export interface JulesAutomationOptions {
   limit?: number;
   ignoreCooldown?: boolean;
   ignoreSchedule?: boolean;
+  targetRepos?: string[];
   julesApiKey: string;
   githubOwner: string;
 }
@@ -203,26 +204,63 @@ export async function executeJulesAutomation(
   // 非表示リポジトリを取得
   const hiddenReposList = await getHiddenRepos();
 
-  // 対象ソースの抽出
-  const targetSources = filterTargetSources(
-    ownerSources,
-    activeReposMap,
-    hiddenReposList,
-    julesConfig.excludedRepos || []
-  );
+  let selectedSources: JulesSource[] = [];
 
-  if (targetSources.length === 0) {
-    return {
-      message: "No target repositories found for the specified owner in Jules sources.",
-      sessionsCreated: [],
-      dryRun,
-    };
+  // 明示的に対象リポジトリが指定されている場合
+  if (options.targetRepos && options.targetRepos.length > 0) {
+    const requestedReposSet = new Set(options.targetRepos.map((r) => r.toLowerCase()));
+    const activeReposSet = new Set(Array.from(activeReposMap.keys()).map((r) => r.toLowerCase()));
+    const hiddenReposSet = new Set(hiddenReposList.map((r) => r.toLowerCase()));
+
+    const specifiedSources = ownerSources.filter((source) => {
+      const repoName = source.githubRepo?.repo.toLowerCase() || "";
+      if (!repoName) return false;
+      if (hiddenReposSet.has(repoName)) return false;
+      if (!activeReposSet.has(repoName)) return false;
+      return requestedReposSet.has(repoName);
+    });
+
+    if (specifiedSources.length === 0) {
+      return {
+        message: "No target repositories found for the specified owner in Jules sources.",
+        sessionsCreated: [],
+        dryRun,
+      };
+    }
+
+    // 指定された順序を維持してソート
+    specifiedSources.sort((a, b) => {
+      const nameA = a.githubRepo?.repo.toLowerCase() || "";
+      const nameB = b.githubRepo?.repo.toLowerCase() || "";
+      const indexA = options.targetRepos!.findIndex((r) => r.toLowerCase() === nameA);
+      const indexB = options.targetRepos!.findIndex((r) => r.toLowerCase() === nameB);
+      return indexA - indexB;
+    });
+
+    const targetLimit = Math.max(1, Math.min(3, options.limit ?? specifiedSources.length));
+    selectedSources = specifiedSources.slice(0, targetLimit);
+  } else {
+    // デフォルトの自動選択ロジック（最終実行日時履歴等）
+    const targetSources = filterTargetSources(
+      ownerSources,
+      activeReposMap,
+      hiddenReposList,
+      julesConfig.excludedRepos || []
+    );
+
+    if (targetSources.length === 0) {
+      return {
+        message: "No target repositories found for the specified owner in Jules sources.",
+        sessionsCreated: [],
+        dryRun,
+      };
+    }
+
+    // 最終実行履歴に基づくソートと制限数の切り出し
+    const lastExecutedTimes = await getRepoLastExecutedTimes();
+    const sortedTargetSources = sortSourcesByExecutionHistory(targetSources, lastExecutedTimes);
+    selectedSources = sortedTargetSources.slice(0, limit);
   }
-
-  // 最終実行履歴に基づくソートと制限数の切り出し
-  const lastExecutedTimes = await getRepoLastExecutedTimes();
-  const sortedTargetSources = sortSourcesByExecutionHistory(targetSources, lastExecutedTimes);
-  const selectedSources = sortedTargetSources.slice(0, limit);
 
   // セッション作成計画の構築
   const sessionsToCreate = await buildSessionRequests(selectedSources, githubOwner);
