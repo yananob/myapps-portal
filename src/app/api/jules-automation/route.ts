@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. リクエストパラメータの解析
-    const { dryRun, task, limit, ignoreCooldown } = await parseEventParams(request);
+    const { dryRun, task, limit, ignoreCooldown, targetRepos } = await parseEventParams(request);
 
     // 4. ビジネスロジックを呼び出し（手動UIからの実行時は ignoreSchedule: true）
     const result = await executeJulesAutomation({
@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
       limit,
       ignoreCooldown,
       ignoreSchedule: true,
+      targetRepos,
       julesApiKey,
       githubOwner,
     });

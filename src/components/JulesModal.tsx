@@ -22,6 +22,8 @@ export const JulesModal: React.FC<JulesModalProps> = ({
   const [julesActiveTab, setJulesActiveTab] = useState<"run" | "config">("run");
   const [julesLimit, setJulesLimit] = useState(1);
   const [julesTask, setJulesTask] = useState("refactor");
+  const [repoSelectionMode, setRepoSelectionMode] = useState<"auto" | "specified">("auto");
+  const [selectedTargetRepos, setSelectedTargetRepos] = useState<Set<string>>(new Set());
   const [isExecutingJules, setIsExecutingJules] = useState(false);
   const [julesResult, setJulesResult] = useState<any | null>(null);
   const [julesError, setJulesError] = useState<string | null>(null);
@@ -103,17 +105,23 @@ export const JulesModal: React.FC<JulesModalProps> = ({
     setJulesResult(null);
 
     try {
+      const bodyPayload: Record<string, any> = {
+        dryRun: false,
+        limit: julesLimit,
+        task: julesTask,
+        ignoreCooldown: true,
+      };
+
+      if (repoSelectionMode === "specified" && selectedTargetRepos.size > 0) {
+        bodyPayload.targetRepos = Array.from(selectedTargetRepos);
+      }
+
       const response = await fetch("/api/jules-automation", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          dryRun: false,
-          limit: julesLimit,
-          task: julesTask,
-          ignoreCooldown: true,
-        }),
+        body: JSON.stringify(bodyPayload),
       });
 
       const data = await response.json();
@@ -194,7 +202,81 @@ export const JulesModal: React.FC<JulesModalProps> = ({
 
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                対象リポジトリ数 (Limit: 1~3)
+                対象リポジトリ指定
+              </label>
+              <div className="flex items-center gap-4 mb-2">
+                <label className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 cursor-pointer select-none">
+                  <input
+                    type="radio"
+                    name="repoSelectionMode"
+                    value="auto"
+                    checked={repoSelectionMode === "auto"}
+                    onChange={() => setRepoSelectionMode("auto")}
+                    disabled={isExecutingJules}
+                    className="text-amber-600 focus:ring-amber-500"
+                  />
+                  <span>自動選択 (最終実行履歴ベース)</span>
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 cursor-pointer select-none">
+                  <input
+                    type="radio"
+                    name="repoSelectionMode"
+                    value="specified"
+                    checked={repoSelectionMode === "specified"}
+                    onChange={() => setRepoSelectionMode("specified")}
+                    disabled={isExecutingJules}
+                    className="text-amber-600 focus:ring-amber-500"
+                  />
+                  <span>個別指定</span>
+                </label>
+              </div>
+
+              {repoSelectionMode === "specified" && (
+                <div className="max-h-36 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-lg p-2 space-y-1 bg-slate-50 dark:bg-slate-800/50 mb-2">
+                  {serviceGroups.filter((group) => !hiddenIds.has(group.baseName)).length === 0 ? (
+                    <p className="text-xs text-slate-400 py-2 text-center">
+                      選択可能なリポジトリがありません
+                    </p>
+                  ) : (
+                    serviceGroups
+                      .filter((group) => !hiddenIds.has(group.baseName))
+                      .map((group) => {
+                        const isSelected = selectedTargetRepos.has(group.baseName);
+                        return (
+                          <label
+                            key={group.baseName}
+                            className="flex items-center gap-2.5 px-2 py-1 hover:bg-slate-200/50 dark:hover:bg-slate-800 rounded text-xs text-slate-800 dark:text-slate-200 cursor-pointer select-none"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setSelectedTargetRepos((prev) => {
+                                  const next = new Set(prev);
+                                  if (checked) {
+                                    next.add(group.baseName);
+                                  } else {
+                                    next.delete(group.baseName);
+                                  }
+                                  return next;
+                                });
+                              }}
+                              disabled={isExecutingJules}
+                              className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 dark:border-slate-700"
+                            />
+                            <span>{group.baseName}</span>
+                          </label>
+                        );
+                      })
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                対象リポジトリ数上限 (Limit: 1~3)
               </label>
               <select
                 value={julesLimit}
