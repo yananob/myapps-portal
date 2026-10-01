@@ -829,6 +829,65 @@ describe("Jules Automation API エンドポイントのテスト", () => {
     expect(body.selectedRepos).toEqual(["app-two"]);
   });
 
+  it("targetRepos が明示的に指定された場合、指定されたリポジトリが優先して選択されること", async () => {
+    const mockSources = [
+      {
+        name: "sources/github/test-owner/app-one",
+        id: "github/test-owner/app-one",
+        githubRepo: { owner: "test-owner", repo: "app-one" },
+      },
+      {
+        name: "sources/github/test-owner/app-two",
+        id: "github/test-owner/app-two",
+        githubRepo: { owner: "test-owner", repo: "app-two" },
+      },
+      {
+        name: "sources/github/test-owner/app-three",
+        id: "github/test-owner/app-three",
+        githubRepo: { owner: "test-owner", repo: "app-three" },
+      },
+    ];
+    vi.mocked(listAllJulesSources).mockResolvedValue(mockSources);
+
+    // POSTボディで app-two を指定
+    const request = createRequest(
+      "Bearer test-cron-secret",
+      "http://localhost/api/jules-automation",
+      { dryRun: true, targetRepos: ["app-two"] }
+    );
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(body.selectedRepos).toEqual(["app-two"]);
+  });
+
+  it("targetRepos に非表示リポジトリが含まれている場合、非表示リポジトリは除外されること", async () => {
+    const mockSources = [
+      {
+        name: "sources/github/test-owner/app-one",
+        id: "github/test-owner/app-one",
+        githubRepo: { owner: "test-owner", repo: "app-one" },
+      },
+      {
+        name: "sources/github/test-owner/app-two",
+        id: "github/test-owner/app-two",
+        githubRepo: { owner: "test-owner", repo: "app-two" },
+      },
+    ];
+    vi.mocked(listAllJulesSources).mockResolvedValue(mockSources);
+    vi.mocked(getHiddenRepos).mockResolvedValue(["app-one"]);
+
+    const request = createRequest(
+      "Bearer test-cron-secret",
+      "http://localhost/api/jules-automation",
+      { dryRun: true, targetRepos: ["app-one", "app-two"] }
+    );
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(body.selectedRepos).toEqual(["app-two"]);
+  });
+
   it("過去のブール値(false)を含む旧設定データが正しくOFF(16)にフォールバック処理されること", async () => {
     const { parseScheduleDayValue } = await vi.importActual<typeof import("@/lib/firestore-client")>("@/lib/firestore-client");
     expect(parseScheduleDayValue(true)).toBe(10);

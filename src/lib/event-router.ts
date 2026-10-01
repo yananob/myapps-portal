@@ -8,6 +8,7 @@ export interface ParsedEventPayload {
   task: string;
   limit?: number;
   ignoreCooldown?: boolean;
+  targetRepos?: string[];
 }
 
 interface RawEventData {
@@ -16,6 +17,7 @@ interface RawEventData {
   task?: string;
   limit?: number;
   ignoreCooldown?: boolean;
+  targetRepos?: string[];
 }
 
 /**
@@ -41,6 +43,13 @@ function extractPayloadFromObject(obj: Record<string, any>): RawEventData {
   }
   if (typeof obj.ignoreCooldown !== "undefined") {
     result.ignoreCooldown = obj.ignoreCooldown === true || obj.ignoreCooldown === "true";
+  }
+
+  const reposVal = obj.targetRepos ?? obj.targetRepo ?? obj.repos ?? obj.repo;
+  if (typeof reposVal === "string") {
+    result.targetRepos = reposVal.split(",").map((s) => s.trim()).filter(Boolean);
+  } else if (Array.isArray(reposVal)) {
+    result.targetRepos = reposVal.map((s) => String(s).trim()).filter(Boolean);
   }
 
   return result;
@@ -95,6 +104,7 @@ export async function parseEventParams(request: NextRequest): Promise<ParsedEven
   const taskQuery = searchParams.get("task");
   const limitQuery = searchParams.get("limit");
   const ignoreCooldownQuery = searchParams.get("ignoreCooldown");
+  const targetReposQuery = searchParams.get("targetRepos") || searchParams.get("targetRepo") || searchParams.get("repos") || searchParams.get("repo");
 
   // command の優先順位: クエリパラメータ > ボディ / Pub/Sub > デフォルト("cleanup")
   const command = commandQuery || bodyData.command || "cleanup";
@@ -124,7 +134,14 @@ export async function parseEventParams(request: NextRequest): Promise<ParsedEven
     ignoreCooldown = bodyData.ignoreCooldown;
   }
 
-  return { command, dryRun, task, limit, ignoreCooldown };
+  let targetRepos: string[] | undefined = undefined;
+  if (targetReposQuery) {
+    targetRepos = targetReposQuery.split(",").map((s) => s.trim()).filter(Boolean);
+  } else if (bodyData.targetRepos) {
+    targetRepos = bodyData.targetRepos;
+  }
+
+  return { command, dryRun, task, limit, ignoreCooldown, targetRepos };
 }
 
 /**
@@ -192,7 +209,7 @@ export async function handleEventRequest(request: NextRequest): Promise<NextResp
     }
 
     // 2. パラメータ解析
-    const { command, dryRun, task, limit, ignoreCooldown } = await parseEventParams(request);
+    const { command, dryRun, task, limit, ignoreCooldown, targetRepos } = await parseEventParams(request);
 
     // 3. ルーティングおよび処理のディスパッチ
     if (command === "jules-automation") {
@@ -212,6 +229,7 @@ export async function handleEventRequest(request: NextRequest): Promise<NextResp
         task,
         limit,
         ignoreCooldown,
+        targetRepos,
         julesApiKey,
         githubOwner,
       });
