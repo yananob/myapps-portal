@@ -137,7 +137,12 @@ export async function buildSessionRequests(
     plans.push({
       source: source.name,
       title: `[Jules] Daily Refactoring for ${repoName}`,
-      prompt: `Analyze this repository and perform general refactoring and documentation updates. This includes cleaning up unused code, simplifying complex functions, updating outdated patterns, optimizing performance, ensuring a clean and consistent coding style throughout the codebase, and updating or creating documentation (such as README.md, inline comments, or docs) to reflect current codebase status. Finally, prepare a Pull Request with your improvements.`,
+      prompt: `Analyze this repository and perform targeted refactoring to improve maintainability, safety/security, or processing speed/performance, while strictly preserving all existing functionality. Choose from or address the following areas without breaking current behavior:
+1. Maintainability Improvement: Simplify complex logic, remove redundant or unused code, improve code structure and readability, and perform documentation updates (such as README.md or inline comments) to reflect current codebase status.
+2. Safety/Security Improvement: Fix potential bugs, handle edge cases gracefully, strengthen error handling, and eliminate security vulnerabilities.
+3. Processing Speed / Performance Improvement: Optimize bottleneck operations, reduce unnecessary memory/CPU usage, and refine inefficient algorithms or queries.
+
+Ensure all existing features and tests remain fully functional. Finally, prepare a Pull Request with your improvements.`,
       taskType: "refactor",
       repo: repoName,
       startingBranch,
