@@ -117,5 +117,5 @@ jobs:
           gh pr comment $PR_NUMBER --body "Deployed to url ${{ needs.deploy-http.outputs.url }} [skip ci]"
 
   create-tag:
-    needs: [deploy]
+    needs: [deploy-http, deploy-event]
     uses: yananob/myapps-common/.github/workflows/create-release-tag.yml@main
