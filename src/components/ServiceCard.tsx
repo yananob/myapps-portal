@@ -29,11 +29,11 @@ const InstanceButtons: React.FC<{
   if (!instance) {
     return (
       <div className="flex gap-1 opacity-20 grayscale">
-        <div className="flex-1 flex items-center justify-center gap-1 px-1 py-1.5 text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-400 rounded border border-transparent whitespace-nowrap">
+        <div className="flex-1 flex items-center justify-center gap-1 px-1 py-1.5 text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-400 rounded-sm border border-transparent whitespace-nowrap">
           {isEvent ? <FlaskConical className="w-3 h-3" /> : <Globe className="w-3 h-3" />}
           <span className="hidden sm:inline">{isEvent ? "Test" : "App"}</span>
         </div>
-        <div className="flex-1 flex items-center justify-center gap-1 px-1 py-1.5 text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-400 rounded border border-transparent whitespace-nowrap">
+        <div className="flex-1 flex items-center justify-center gap-1 px-1 py-1.5 text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-400 rounded-sm border border-transparent whitespace-nowrap">
           <ListTodo className="w-3 h-3" /> <span className="hidden sm:inline">Log</span>
         </div>
       </div>
@@ -49,7 +49,7 @@ const InstanceButtons: React.FC<{
             target="_blank"
             rel="noopener noreferrer"
             className={cn(
-              "flex-1 flex items-center justify-center gap-1 px-1 py-1.5 text-[10px] font-medium text-white rounded transition-colors shadow-sm whitespace-nowrap",
+              "flex-1 flex items-center justify-center gap-1 px-1 py-1.5 text-[10px] font-medium text-white rounded-sm transition-colors shadow-xs whitespace-nowrap",
               colorClass
             )}
             title="Open Cloud Run Test Page"
@@ -60,7 +60,7 @@ const InstanceButtons: React.FC<{
         ) : (
           <button
             disabled
-            className="flex-1 flex items-center justify-center gap-1 px-1 py-1.5 text-[10px] font-medium text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded cursor-not-allowed whitespace-nowrap opacity-60"
+            className="flex-1 flex items-center justify-center gap-1 px-1 py-1.5 text-[10px] font-medium text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-sm cursor-not-allowed whitespace-nowrap opacity-60"
             title="Test page not available"
           >
             <FlaskConical className="w-3 h-3" />
@@ -73,7 +73,7 @@ const InstanceButtons: React.FC<{
           target="_blank"
           rel="noopener noreferrer"
           className={cn(
-            "flex-1 flex items-center justify-center gap-1 px-1 py-1.5 text-[10px] font-medium text-white rounded transition-colors shadow-sm whitespace-nowrap",
+            "flex-1 flex items-center justify-center gap-1 px-1 py-1.5 text-[10px] font-medium text-white rounded-sm transition-colors shadow-xs whitespace-nowrap",
             colorClass
           )}
           title="Open App"
@@ -86,7 +86,7 @@ const InstanceButtons: React.FC<{
         href={instance.logUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex-1 flex items-center justify-center gap-1 px-1 py-1.5 text-[10px] font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 rounded transition-colors shadow-sm whitespace-nowrap"
+        className="flex-1 flex items-center justify-center gap-1 px-1 py-1.5 text-[10px] font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 rounded-sm transition-colors shadow-xs whitespace-nowrap"
         title="View Logs"
       >
         <ListTodo className="w-3 h-3 text-slate-500" />
@@ -115,7 +115,7 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({
 }) => {
   return (
     <div className={cn(
-      "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm hover:shadow-md transition-all overflow-hidden",
+      "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xs hover:shadow-md transition-all overflow-hidden",
       isHidden && "opacity-60 grayscale-[0.5]"
     )}>
       <div className="p-3 sm:p-4">
