@@ -10,7 +10,7 @@ concurrency:
   group: myapps-portal-deploy-production
 
 permissions:
-  contents: 'read'
+  contents: 'write'
   id-token: 'write'
 
 jobs:
@@ -115,3 +115,7 @@ jobs:
         if: env.PR_NUMBER != ''
         run: |
           gh pr comment $PR_NUMBER --body "Deployed to url ${{ needs.deploy-http.outputs.url }} [skip ci]"
+
+  create-tag:
+    needs: [deploy-http, deploy-event]
+    uses: yananob/myapps-common/.github/workflows/create-release-tag.yml@main

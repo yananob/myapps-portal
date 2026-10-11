@@ -158,7 +158,7 @@ export default function Dashboard() {
             <input
               type="text"
               placeholder="Search apps..."
-              className="w-full pl-10 pr-10 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              className="w-full pl-10 pr-10 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-all"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               autoCapitalize="none"
@@ -227,7 +227,7 @@ export default function Dashboard() {
             </button>
             <button
               onClick={() => setIsJulesModalOpen(true)}
-              className="ml-1 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 shadow-sm shrink-0"
+              className="ml-1 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 shadow-xs shrink-0"
               title="Jules Automation を画面から起動・設定"
             >
               <Zap className="w-4 h-4 fill-white" />

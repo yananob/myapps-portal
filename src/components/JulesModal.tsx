@@ -141,7 +141,7 @@ export const JulesModal: React.FC<JulesModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl w-full max-w-lg p-6 relative flex flex-col max-h-[90vh] overflow-y-auto">
         <button
           onClick={onClose}
@@ -245,7 +245,7 @@ export const JulesModal: React.FC<JulesModalProps> = ({
                         return (
                           <label
                             key={group.baseName}
-                            className="flex items-center gap-2.5 px-2 py-1 hover:bg-slate-200/50 dark:hover:bg-slate-800 rounded text-xs text-slate-800 dark:text-slate-200 cursor-pointer select-none"
+                            className="flex items-center gap-2.5 px-2 py-1 hover:bg-slate-200/50 dark:hover:bg-slate-800 rounded-sm text-xs text-slate-800 dark:text-slate-200 cursor-pointer select-none"
                           >
                             <input
                               type="checkbox"
@@ -263,7 +263,7 @@ export const JulesModal: React.FC<JulesModalProps> = ({
                                 });
                               }}
                               disabled={isExecutingJules}
-                              className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 dark:border-slate-700"
+                              className="w-4 h-4 rounded-sm text-amber-600 focus:ring-amber-500 border-slate-300 dark:border-slate-700"
                             />
                             <span>{group.baseName}</span>
                           </label>
@@ -282,7 +282,7 @@ export const JulesModal: React.FC<JulesModalProps> = ({
                 value={julesLimit}
                 onChange={(e) => setJulesLimit(Number(e.target.value))}
                 disabled={isExecutingJules}
-                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-amber-500"
               >
                 <option value={1}>1 リポジトリ</option>
                 <option value={2}>2 リポジトリ</option>
@@ -299,7 +299,7 @@ export const JulesModal: React.FC<JulesModalProps> = ({
                 value={julesTask}
                 onChange={(e) => setJulesTask(e.target.value)}
                 disabled={isExecutingJules}
-                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-amber-500 text-sm"
                 placeholder="refactor"
               />
             </div>
@@ -370,7 +370,7 @@ export const JulesModal: React.FC<JulesModalProps> = ({
               <button
                 type="submit"
                 disabled={isExecutingJules}
-                className="px-4 py-2 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors flex items-center gap-2 shadow-sm"
+                className="px-4 py-2 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors flex items-center gap-2 shadow-xs"
               >
                 {isExecutingJules ? (
                   <>
@@ -438,7 +438,7 @@ export const JulesModal: React.FC<JulesModalProps> = ({
                                 [dayKey]: val,
                               }));
                             }}
-                            className="w-full text-[11px] font-medium py-1 px-0.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-center text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                            className="w-full text-[11px] font-medium py-1 px-0.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-sm text-center text-slate-900 dark:text-white focus:outline-hidden focus:ring-1 focus:ring-amber-500"
                           >
                             <option value={16}>OFF</option>
                             {Array.from({ length: 16 }, (_, i) => (
@@ -474,7 +474,7 @@ export const JulesModal: React.FC<JulesModalProps> = ({
                           return (
                             <label
                               key={group.baseName}
-                              className="flex items-center gap-2.5 px-2 py-1.5 hover:bg-slate-200/50 dark:hover:bg-slate-800 rounded text-xs text-slate-800 dark:text-slate-200 cursor-pointer select-none"
+                              className="flex items-center gap-2.5 px-2 py-1.5 hover:bg-slate-200/50 dark:hover:bg-slate-800 rounded-sm text-xs text-slate-800 dark:text-slate-200 cursor-pointer select-none"
                             >
                               <input
                                 type="checkbox"
@@ -491,7 +491,7 @@ export const JulesModal: React.FC<JulesModalProps> = ({
                                     return next;
                                   });
                                 }}
-                                className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 dark:border-slate-700"
+                                className="w-4 h-4 rounded-sm text-amber-600 focus:ring-amber-500 border-slate-300 dark:border-slate-700"
                               />
                               <span className={cn(isExcluded && "line-through text-slate-400")}>
                                 {group.baseName}
@@ -529,7 +529,7 @@ export const JulesModal: React.FC<JulesModalProps> = ({
                     type="button"
                     onClick={handleSaveJulesConfig}
                     disabled={isSavingJulesConfig}
-                    className="px-4 py-2 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors flex items-center gap-2 shadow-sm"
+                    className="px-4 py-2 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors flex items-center gap-2 shadow-xs"
                   >
                     {isSavingJulesConfig ? (
                       <>
