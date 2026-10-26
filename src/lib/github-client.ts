@@ -29,11 +29,10 @@ export async function getAllReposInfo(options?: {
       per_page: 100,
     });
 
+    const lowerOwner = githubOwner.toLowerCase();
     // 指定されたオーナー（ユーザーまたは組織）のリポジトリのみにフィルタリングし、アーカイブされたリポジトリを除外
     const activeRepos = allRepos.filter(
-      (repo) =>
-        repo.owner.login.toLowerCase() === githubOwner.toLowerCase() &&
-        !repo.archived
+      (repo) => repo.owner.login.toLowerCase() === lowerOwner && !repo.archived
     );
 
     const alertsMap = new Map<string, { hasAlerts: boolean; count: number }>();
@@ -52,29 +51,18 @@ export async function getAllReposInfo(options?: {
                   per_page: 100,
                 });
                 const count = response.data ? response.data.length : 0;
-                return {
-                  repoName: repo.name,
+                alertsMap.set(repo.name, {
                   hasAlerts: count > 0,
                   count,
-                };
+                });
               } catch {
-                return {
-                  repoName: repo.name,
+                alertsMap.set(repo.name, {
                   hasAlerts: false,
                   count: 0,
-                };
-              }
-            })
-          ).then((alertsResults) => {
-            alertsResults.forEach((res) => {
-              if (res.status === "fulfilled") {
-                alertsMap.set(res.value.repoName, {
-                  hasAlerts: res.value.hasAlerts,
-                  count: res.value.count,
                 });
               }
-            });
-          })
+            })
+          )
         : Promise.resolve(),
 
       includeOpenPullRequests
@@ -88,24 +76,12 @@ export async function getAllReposInfo(options?: {
                   per_page: 100,
                 });
                 const count = response.data ? response.data.length : 0;
-                return {
-                  repoName: repo.name,
-                  count,
-                };
+                prsMap.set(repo.name, count);
               } catch {
-                return {
-                  repoName: repo.name,
-                  count: 0,
-                };
+                prsMap.set(repo.name, 0);
               }
             })
-          ).then((prsResults) => {
-            prsResults.forEach((res) => {
-              if (res.status === "fulfilled") {
-                prsMap.set(res.value.repoName, res.value.count);
-              }
-            });
-          })
+          )
         : Promise.resolve(),
     ]);
 

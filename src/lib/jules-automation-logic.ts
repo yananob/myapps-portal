@@ -39,6 +39,16 @@ export interface JulesAutomationResult {
 }
 
 /**
+ * デフォルトのリファクタリング指示プロンプト
+ */
+export const DEFAULT_REFACTORING_PROMPT = `Analyze this repository and perform targeted refactoring to improve maintainability, safety/security, or processing speed/performance, while strictly preserving all existing functionality. Choose from or address the following areas without breaking current behavior:
+1. Maintainability Improvement: Simplify complex logic, remove redundant or unused code, improve code structure and readability, and perform documentation updates (such as README.md or inline comments) to reflect current codebase status.
+2. Safety/Security Improvement: Fix potential bugs, handle edge cases gracefully, strengthen error handling, and eliminate security vulnerabilities.
+3. Processing Speed / Performance Improvement: Optimize bottleneck operations, reduce unnecessary memory/CPU usage, and refine inefficient algorithms or queries.
+
+Ensure all existing features and tests remain fully functional. Finally, prepare a Pull Request with your improvements.`;
+
+/**
  * 作成予定の Jules セッションリクエスト情報
  */
 export interface SessionRequestPlan {
@@ -89,12 +99,11 @@ export function filterTargetSources(
   const excludedReposSet = new Set(excludedReposList.map((r) => r.toLowerCase()));
 
   return sources.filter((source) => {
-    const repoName = source.githubRepo?.repo.toLowerCase() || "";
+    const repoName = source.githubRepo?.repo.toLowerCase();
     if (!repoName || repoName === "_template") return false;
     if (hiddenReposSet.has(repoName)) return false;
     if (excludedReposSet.has(repoName)) return false;
-    if (!activeReposSet.has(repoName)) return false;
-    return true;
+    return activeReposSet.has(repoName);
   });
 }
 
@@ -105,12 +114,20 @@ export function sortSourcesByExecutionHistory(
   sources: JulesSource[],
   lastExecutedTimes: Record<string, Date>
 ): JulesSource[] {
+  // ソート比較中の反復的なオブジェクトアクセスおよび Date.getTime() 呼び出しを削減するため事前計算
+  const timeMap = new Map<string, number>();
+  for (const source of sources) {
+    const name = source.githubRepo?.repo || "";
+    const lastExecuted = lastExecutedTimes[name];
+    timeMap.set(name, lastExecuted ? lastExecuted.getTime() : 0);
+  }
+
   return [...sources].sort((a, b) => {
     const nameA = a.githubRepo?.repo || "";
     const nameB = b.githubRepo?.repo || "";
 
-    const timeA = lastExecutedTimes[nameA] ? lastExecutedTimes[nameA].getTime() : 0;
-    const timeB = lastExecutedTimes[nameB] ? lastExecutedTimes[nameB].getTime() : 0;
+    const timeA = timeMap.get(nameA) || 0;
+    const timeB = timeMap.get(nameB) || 0;
 
     if (timeA !== timeB) {
       return timeA - timeB;
@@ -137,12 +154,7 @@ export async function buildSessionRequests(
     plans.push({
       source: source.name,
       title: `[Jules] Daily Refactoring for ${repoName}`,
-      prompt: `Analyze this repository and perform targeted refactoring to improve maintainability, safety/security, or processing speed/performance, while strictly preserving all existing functionality. Choose from or address the following areas without breaking current behavior:
-1. Maintainability Improvement: Simplify complex logic, remove redundant or unused code, improve code structure and readability, and perform documentation updates (such as README.md or inline comments) to reflect current codebase status.
-2. Safety/Security Improvement: Fix potential bugs, handle edge cases gracefully, strengthen error handling, and eliminate security vulnerabilities.
-3. Processing Speed / Performance Improvement: Optimize bottleneck operations, reduce unnecessary memory/CPU usage, and refine inefficient algorithms or queries.
-
-Ensure all existing features and tests remain fully functional. Finally, prepare a Pull Request with your improvements.`,
+      prompt: DEFAULT_REFACTORING_PROMPT,
       taskType: "refactor",
       repo: repoName,
       startingBranch,

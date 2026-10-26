@@ -23,7 +23,9 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { repo, hidden } = body;
 
-    if (!repo || typeof repo !== "string") {
+    const trimmedRepo = typeof repo === "string" ? repo.trim() : "";
+
+    if (!trimmedRepo) {
       return NextResponse.json(
         { error: "無効なリポジトリ名が指定されました。" },
         { status: 400 }
@@ -37,9 +39,9 @@ export async function POST(request: Request) {
       );
     }
 
-    await setRepoHidden(repo, hidden);
+    await setRepoHidden(trimmedRepo, hidden);
 
-    return NextResponse.json({ success: true, repo, hidden });
+    return NextResponse.json({ success: true, repo: trimmedRepo, hidden });
   } catch (error: any) {
     console.error("POST /api/hidden-repos エラー:", error);
     const errorMessage = error instanceof Error ? error.message : "Internal Server Error";
