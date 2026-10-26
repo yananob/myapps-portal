@@ -34,6 +34,24 @@ export function getRootCollectionName(): string {
 }
 
 /**
+ * jules-history 配下のサブコレクション参照を取得するヘルパー関数
+ */
+function getJulesHistoryCollection(subCollection: string) {
+  const db = getFirestoreClient();
+  const rootCollection = getRootCollectionName();
+  return db.collection(rootCollection).doc("jules-history").collection(subCollection);
+}
+
+/**
+ * settings 配下のサブコレクション参照を取得するヘルパー関数
+ */
+function getSettingsCollection(subCollection: string) {
+  const db = getFirestoreClient();
+  const rootCollection = getRootCollectionName();
+  return db.collection(rootCollection).doc("settings").collection(subCollection);
+}
+
+/**
  * すべての子リポジトリの最終実行日時を取得します。
  * Firestoreの接続エラーや認証エラーが発生した場合は、空のオブジェクトを返して処理を継続します。
  *
@@ -42,13 +60,7 @@ export function getRootCollectionName(): string {
 export async function getRepoLastExecutedTimes(): Promise<Record<string, Date>> {
   const result: Record<string, Date> = {};
   try {
-    const db = getFirestoreClient();
-    const rootCollection = getRootCollectionName();
-    const snapshot = await db
-      .collection(rootCollection)
-      .doc("jules-history")
-      .collection("repos")
-      .get();
+    const snapshot = await getJulesHistoryCollection("repos").get();
     snapshot.forEach((doc) => {
       const data = doc.data();
       // Firestoreの Timestamp から Date オブジェクトへ変換
@@ -68,18 +80,11 @@ export async function getRepoLastExecutedTimes(): Promise<Record<string, Date>> 
  */
 export async function updateRepoLastExecutedTime(repo: string): Promise<void> {
   try {
-    const db = getFirestoreClient();
-    const rootCollection = getRootCollectionName();
-    await db
-      .collection(rootCollection)
-      .doc("jules-history")
-      .collection("repos")
-      .doc(repo)
-      .set({
-        repoName: repo,
-        lastExecutedAt: new Date(),
-      }, { merge: true });
-    console.log(`Firestore (${rootCollection}) にリポジトリ ${repo} の最終実行日時を保存しました。`);
+    await getJulesHistoryCollection("repos").doc(repo).set({
+      repoName: repo,
+      lastExecutedAt: new Date(),
+    }, { merge: true });
+    console.log(`Firestore (${getRootCollectionName()}) にリポジトリ ${repo} の最終実行日時を保存しました。`);
   } catch (error) {
     console.error(`Firestoreへの最終実行日時（${repo}）の保存に失敗しました:`, error);
   }
@@ -92,14 +97,7 @@ export async function updateRepoLastExecutedTime(repo: string): Promise<void> {
  */
 export async function getLastBatchExecutedTime(): Promise<Date | null> {
   try {
-    const db = getFirestoreClient();
-    const rootCollection = getRootCollectionName();
-    const doc = await db
-      .collection(rootCollection)
-      .doc("jules-history")
-      .collection("meta")
-      .doc("batch")
-      .get();
+    const doc = await getJulesHistoryCollection("meta").doc("batch").get();
 
     if (!doc.exists) {
       return null;
@@ -122,17 +120,10 @@ export async function getLastBatchExecutedTime(): Promise<Date | null> {
  */
 export async function updateLastBatchExecutedTime(): Promise<void> {
   try {
-    const db = getFirestoreClient();
-    const rootCollection = getRootCollectionName();
-    await db
-      .collection(rootCollection)
-      .doc("jules-history")
-      .collection("meta")
-      .doc("batch")
-      .set({
-        lastBatchExecutedAt: new Date(),
-      }, { merge: true });
-    console.log(`Firestore (${rootCollection}) に最終バッチ実行日時を保存しました。`);
+    await getJulesHistoryCollection("meta").doc("batch").set({
+      lastBatchExecutedAt: new Date(),
+    }, { merge: true });
+    console.log(`Firestore (${getRootCollectionName()}) に最終バッチ実行日時を保存しました。`);
   } catch (error) {
     console.error(`Firestoreへの最終バッチ実行日時の保存に失敗しました:`, error);
   }
@@ -147,13 +138,7 @@ export async function updateLastBatchExecutedTime(): Promise<void> {
 export async function getHiddenRepos(): Promise<string[]> {
   const result: string[] = [];
   try {
-    const db = getFirestoreClient();
-    const rootCollection = getRootCollectionName();
-    const snapshot = await db
-      .collection(rootCollection)
-      .doc("settings")
-      .collection("hidden-repos")
-      .get();
+    const snapshot = await getSettingsCollection("hidden-repos").get();
     snapshot.forEach((doc) => {
       const data = doc.data();
       if (data.hidden !== false) {
@@ -226,14 +211,7 @@ export function parseScheduleDayValue(val: unknown, defaultValue: number = 10): 
  */
 export async function getJulesConfig(): Promise<JulesConfig> {
   try {
-    const db = getFirestoreClient();
-    const rootCollection = getRootCollectionName();
-    const doc = await db
-      .collection(rootCollection)
-      .doc("settings")
-      .collection("jules")
-      .doc("config")
-      .get();
+    const doc = await getSettingsCollection("jules").doc("config").get();
 
     if (!doc.exists) {
       return DEFAULT_JULES_CONFIG;
@@ -263,19 +241,12 @@ export async function getJulesConfig(): Promise<JulesConfig> {
  */
 export async function setJulesConfig(config: JulesConfig): Promise<void> {
   try {
-    const db = getFirestoreClient();
-    const rootCollection = getRootCollectionName();
-    await db
-      .collection(rootCollection)
-      .doc("settings")
-      .collection("jules")
-      .doc("config")
-      .set({
-        schedule: config.schedule,
-        excludedRepos: config.excludedRepos,
-        updatedAt: new Date(),
-      }, { merge: true });
-    console.log(`Firestore (${rootCollection}) にJules設定を保存しました。`);
+    await getSettingsCollection("jules").doc("config").set({
+      schedule: config.schedule,
+      excludedRepos: config.excludedRepos,
+      updatedAt: new Date(),
+    }, { merge: true });
+    console.log(`Firestore (${getRootCollectionName()}) にJules設定を保存しました。`);
   } catch (error) {
     console.error(`FirestoreへのJules設定の保存に失敗しました:`, error);
     throw error;
@@ -290,13 +261,7 @@ export async function setJulesConfig(config: JulesConfig): Promise<void> {
  */
 export async function setRepoHidden(repo: string, hidden: boolean): Promise<void> {
   try {
-    const db = getFirestoreClient();
-    const rootCollection = getRootCollectionName();
-    const docRef = db
-      .collection(rootCollection)
-      .doc("settings")
-      .collection("hidden-repos")
-      .doc(repo);
+    const docRef = getSettingsCollection("hidden-repos").doc(repo);
 
     if (hidden) {
       await docRef.set({
@@ -304,10 +269,10 @@ export async function setRepoHidden(repo: string, hidden: boolean): Promise<void
         hidden: true,
         updatedAt: new Date(),
       }, { merge: true });
-      console.log(`Firestore (${rootCollection}) にリポジトリ ${repo} の非表示設定(hidden=true)を保存しました。`);
+      console.log(`Firestore (${getRootCollectionName()}) にリポジトリ ${repo} の非表示設定(hidden=true)を保存しました。`);
     } else {
       await docRef.delete();
-      console.log(`Firestore (${rootCollection}) からリポジトリ ${repo} の非表示設定を削除(hidden=false)しました。`);
+      console.log(`Firestore (${getRootCollectionName()}) からリポジトリ ${repo} の非表示設定を削除(hidden=false)しました。`);
     }
   } catch (error) {
     console.error(`Firestoreへの非表示設定（${repo}: ${hidden}）の保存に失敗しました:`, error);

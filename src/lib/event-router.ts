@@ -1,6 +1,21 @@
+import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { executeCleanup } from "@/lib/cleanup-logic";
 import { executeJulesAutomation } from "@/lib/jules-automation-logic";
+
+/**
+ * 2つの文字列をタイミング攻撃に対して安全に比較します。
+ */
+function safeCompareStrings(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+
+  if (bufA.length !== bufB.length) {
+    return false;
+  }
+
+  return timingSafeEqual(bufA, bufB);
+}
 
 export interface ParsedEventPayload {
   command: string;
@@ -37,8 +52,8 @@ function extractPayloadFromObject(obj: Record<string, any>): RawEventData {
   }
   if (typeof obj.limit !== "undefined") {
     const parsedLimit = Number(obj.limit);
-    if (!isNaN(parsedLimit)) {
-      result.limit = parsedLimit;
+    if (!isNaN(parsedLimit) && parsedLimit > 0) {
+      result.limit = Math.floor(parsedLimit);
     }
   }
   if (typeof obj.ignoreCooldown !== "undefined") {
@@ -122,7 +137,7 @@ export async function parseEventParams(request: NextRequest): Promise<ParsedEven
   let limit: number | undefined = undefined;
   if (limitQuery !== null) {
     const rawLimit = Number(limitQuery);
-    if (!isNaN(rawLimit)) limit = rawLimit;
+    if (!isNaN(rawLimit) && rawLimit > 0) limit = Math.floor(rawLimit);
   } else if (typeof bodyData.limit !== "undefined") {
     limit = bodyData.limit;
   }
@@ -151,8 +166,11 @@ export function verifyEventAuth(request: NextRequest): { authorized: boolean; er
   const authHeader = request.headers.get("Authorization");
   const cronSecret = process.env.CRON_SECRET;
 
-  if (cronSecret && authHeader === `Bearer ${cronSecret}`) {
-    return { authorized: true };
+  if (cronSecret && authHeader) {
+    const expectedAuth = `Bearer ${cronSecret}`;
+    if (safeCompareStrings(authHeader, expectedAuth)) {
+      return { authorized: true };
+    }
   }
 
   // 同一オリジン（ダッシュボード画面）からのリクエストを許可
