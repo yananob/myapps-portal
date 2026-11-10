@@ -202,7 +202,7 @@ export async function executeJulesAutomation(
   const julesConfig = await getJulesConfig();
 
   // 曜日別起動スケジュール・必要残容量の判定（JST 基準）
-  let requiredCapacity = 10;
+  let requiredCapacity = 0;
   if (!options.ignoreSchedule) {
     const { disabled, requiredCapacity: reqCap, currentDay } = getScheduleForToday(julesConfig.schedule);
     requiredCapacity = reqCap;
