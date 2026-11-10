@@ -14,7 +14,7 @@
     "@google-cloud/run": "^1.5.0",
     "clsx": "^2.1.1",
     "lucide-react": "0.460.0",
-    "next": "15.5.27",
+    "next": "15.5.28",
     "octokit": "^4.0.2",
     "react": "19.0.0",
     "react-dom": "19.0.0",
@@ -32,10 +32,10 @@
     "eslint": "^8",
     "eslint-config-next": "15.0.3",
     "jsdom": "^29.1.1",
-    "postcss": "^8.5.30",
+    "postcss": "^8.5.31",
     "tailwindcss": "^4.3.3",
     "typescript": "^5",
     "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.5"
   }
 }
